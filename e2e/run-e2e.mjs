@@ -549,6 +549,7 @@ async function main() {
   log('修改昵称与头像...');
   await page.click('[data-testid="edit-profile"]');
   await waitForTestId(page, 'profile-edit-modal');
+  await sleep(600);
   const newNickname = '赤光测试员';
   await fillTestId(page, 'profile-nickname-input', newNickname);
   const avatarUploadResponse = page.waitForResponse(

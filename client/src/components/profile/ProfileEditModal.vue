@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
-import { CameraOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons-vue';
+import { CameraOutlined, CloseOutlined, DeleteOutlined, UploadOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import { apiUpdateProfile } from '@/api/users';
@@ -99,13 +99,24 @@ async function save() {
 <template>
   <a-modal
     v-model:open="open"
-    title="编辑个人资料"
-    :width="460"
+    :closable="false"
+    :width="500"
     :footer="null"
+    centered
     destroy-on-close
     wrap-class-name="profile-edit-wrap"
   >
     <div class="profile-editor" data-testid="profile-edit-modal">
+      <header class="editor-head">
+        <div>
+          <h2 class="editor-title">编辑个人资料</h2>
+          <p class="editor-subtitle">更新你的昵称与头像，让同志更容易认识你。</p>
+        </div>
+        <button class="editor-close" type="button" aria-label="关闭" @click="ui.closeProfileEditor()">
+          <CloseOutlined />
+        </button>
+      </header>
+
       <div class="avatar-section">
         <div class="avatar-preview" data-testid="avatar-preview">
           <UserAvatar :user="previewUser" :size="76" />
@@ -182,14 +193,58 @@ async function save() {
 
 <style scoped>
 .profile-editor {
-  padding: 4px 2px 0;
+  padding: 22px 26px 20px;
+}
+
+.editor-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--rl-border-light);
+}
+
+.editor-title {
+  margin: 0;
+  color: var(--rl-deep);
+  font-family: var(--rl-serif);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.editor-subtitle {
+  margin: 3px 0 0;
+  color: var(--rl-text-secondary);
+  font-size: 12px;
+}
+
+.editor-close {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--rl-text-secondary);
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.editor-close:hover {
+  background: #fff1f0;
+  color: var(--rl-primary);
 }
 
 .avatar-section {
   display: flex;
   align-items: center;
   gap: 18px;
-  padding: 4px 0 18px;
+  padding: 18px 0;
   border-bottom: 1px solid var(--rl-border-light);
 }
 
@@ -213,11 +268,12 @@ async function save() {
   height: 26px;
   align-items: center;
   justify-content: center;
-  border: 2px solid #fff;
+  border: 1px solid #fff;
   border-radius: 50%;
   background: var(--rl-primary);
   color: #fff;
   font-size: 12px;
+  box-shadow: 0 1px 4px rgba(80, 40, 20, 0.18);
   cursor: pointer;
 }
 
@@ -295,6 +351,17 @@ async function save() {
   font-size: 13px;
 }
 
+.profile-editor :deep(.ant-input) {
+  border-color: var(--rl-border);
+  background: #fbf9f5;
+}
+
+.profile-editor :deep(.ant-input:focus),
+.profile-editor :deep(.ant-input-focused) {
+  border-color: var(--rl-primary);
+  box-shadow: 0 0 0 2px rgba(200, 16, 46, 0.08);
+}
+
 .field-foot {
   display: flex;
   align-items: center;
@@ -327,7 +394,7 @@ async function save() {
   justify-content: flex-end;
   gap: 10px;
   margin-top: 22px;
-  padding-top: 14px;
+  padding-top: 15px;
   border-top: 1px solid var(--rl-border-light);
 }
 
