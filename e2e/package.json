@@ -1,0 +1,15 @@
+{
+  "name": "redlight-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "赤光社 RedLight 端到端测试（Playwright Core + 本机 Microsoft Edge）",
+  "scripts": {
+    "test": "node run-e2e.mjs",
+    "fixtures": "node generate-fixtures.mjs"
+  },
+  "devDependencies": {
+    "adm-zip": "0.5.16",
+    "playwright-core": "1.65.0"
+  }
+}

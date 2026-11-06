@@ -1,0 +1,19 @@
+# 赤光社 RedLight · Docker 构建上下文忽略文件
+**/node_modules
+**/dist
+**/.tmp
+**/.vite
+**/screenshots
+**/*.log
+server/uploads
+server/data
+server/uploads-*
+e2e/.tmp
+.git
+.gitignore
+.npm-cache
+.env
+.env.*
+!.env.example
+README.md
+TEST-REPORT.md

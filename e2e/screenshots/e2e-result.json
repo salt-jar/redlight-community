@@ -1,0 +1,20 @@
+{
+  "email": "e2e1793929966350@example.com",
+  "nickname": "同志_e2e179",
+  "screenshots": [
+    "01-login.png",
+    "02-home-feed.png",
+    "03-book-detail.png",
+    "04-reader-pdf.png",
+    "05-reader-epub.png",
+    "06-books-library.png",
+    "07-search-results.png",
+    "08-chat.png",
+    "09-chat-two-users.png",
+    "10-profile.png",
+    "11-responsive-900.png",
+    "12-responsive-375.png"
+  ],
+  "consoleErrors": [],
+  "pageErrors": []
+}
