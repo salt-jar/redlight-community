@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { SearchOutlined } from '@ant-design/icons-vue';
 import AppShell from '@/components/layout/AppShell.vue';
 import BookCard from '@/components/book/BookCard.vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
@@ -15,6 +16,7 @@ const route = useRoute();
 const router = useRouter();
 
 const q = ref('');
+const draft = ref('');
 const tab = ref<TabKey>('all');
 const loading = ref(false);
 const error = ref('');
@@ -67,10 +69,17 @@ async function load() {
 
 function syncFromRoute() {
   q.value = typeof route.query.q === 'string' ? route.query.q : '';
+  draft.value = q.value;
   const nextTab = String(route.query.tab || 'all');
   tab.value = nextTab === 'books' || nextTab === 'users' ? nextTab : 'all';
   bookPage.value = 1;
   userPage.value = 1;
+}
+
+function submitSearch() {
+  const keyword = draft.value.trim();
+  if (!keyword) return;
+  void router.push({ path: '/search', query: { q: keyword, tab: 'all' } });
 }
 
 function switchTab(next: TabKey) {
@@ -114,6 +123,19 @@ watch(
         <template v-if="!loading"> · 共 {{ totalCount }} 条结果</template>
       </p>
       <p v-else class="page-subtitle">在顶栏搜索框中输入书名、作者或同志昵称</p>
+
+      <form class="search-bar" @submit.prevent="submitSearch">
+        <a-input
+          v-model:value="draft"
+          size="large"
+          allow-clear
+          placeholder="搜索书名 / 作者 / 同志昵称..."
+          data-testid="search-page-input"
+        >
+          <template #prefix><SearchOutlined class="search-bar-icon" /></template>
+        </a-input>
+        <button class="search-bar-btn" type="submit" data-testid="search-page-submit">搜索</button>
+      </form>
     </header>
 
     <div v-if="hasQuery" class="result-tabs" data-testid="search-tabs">
@@ -204,6 +226,40 @@ watch(
 .keyword {
   color: var(--rl-primary);
   font-weight: 600;
+}
+
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--rl-shadow);
+}
+
+.search-bar :deep(.ant-input-affix-wrapper) {
+  border-color: var(--rl-border);
+  background: #fbf9f5;
+}
+
+.search-bar-icon {
+  color: #c2b39a;
+}
+
+.search-bar-btn {
+  flex: 0 0 auto;
+  padding: 0 22px;
+  border: 1px solid var(--rl-primary);
+  border-radius: 6px;
+  background: var(--rl-primary);
+  color: #fff;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.search-bar-btn:hover {
+  background: var(--rl-primary-hover);
 }
 
 .result-tabs {

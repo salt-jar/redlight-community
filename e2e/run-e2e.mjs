@@ -568,6 +568,18 @@ async function main() {
   assert(narrow.overflow <= 1, `375px 不应横向溢出，溢出 ${narrow.overflow}px`);
   await shot(page, 'responsive-375');
 
+  log('检查移动端搜索入口...');
+  await page.click('[data-testid="mobile-search"]');
+  await page.waitForURL((url) => url.pathname === '/search', { timeout: 15000 });
+  await waitForTestId(page, 'search-page-input');
+  await fillTestId(page, 'search-page-input', '共产党');
+  await page.click('[data-testid="search-page-submit"]');
+  await page.waitForURL((url) => url.pathname === '/search' && url.searchParams.get('q') === '共产党', {
+    timeout: 15000,
+  });
+  await page.waitForSelector('[data-testid="search-book-grid"] .book-card');
+  await shot(page, 'mobile-search');
+
   assert(pageErrors.length === 0, `页面存在未捕获异常：${pageErrors.join(' | ')}`);
   const relevantConsoleErrors = consoleErrors.filter(
     (text) => !text.includes('favicon') && !text.includes('Download the Vue Devtools'),

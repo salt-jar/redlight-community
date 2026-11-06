@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { EditOutlined, UploadOutlined } from '@ant-design/icons-vue';
+import { EditOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import GlobalSearch from './GlobalSearch.vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
@@ -21,6 +21,10 @@ function openComposer() {
 
 function goUpload() {
   void router.push('/upload');
+}
+
+function goSearch() {
+  void router.push('/search');
 }
 
 function onMenuClick(info: { key: string | number }) {
@@ -57,6 +61,9 @@ function onMenuClick(info: { key: string | number }) {
       </div>
 
       <div class="header-actions">
+        <button class="mobile-search-btn" type="button" aria-label="搜索" data-testid="mobile-search" @click="goSearch">
+          <SearchOutlined />
+        </button>
         <button class="compose-btn" type="button" data-testid="header-compose" @click="openComposer">
           <EditOutlined />
           <span class="btn-label">发帖</span>
@@ -206,6 +213,10 @@ function onMenuClick(info: { key: string | number }) {
   border-color: #d4af37;
 }
 
+.mobile-search-btn {
+  display: none;
+}
+
 .menu-user {
   display: flex;
   min-width: 180px;
@@ -259,6 +270,20 @@ function onMenuClick(info: { key: string | number }) {
 
   .header-search {
     display: none;
+  }
+
+  .mobile-search-btn {
+    display: flex;
+    width: 34px;
+    height: 32px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(255, 255, 255, 0.62);
+    border-radius: 6px;
+    background: transparent;
+    color: #fff;
+    font-size: 15px;
+    cursor: pointer;
   }
 
   .compose-btn .btn-label,
