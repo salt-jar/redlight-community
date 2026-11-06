@@ -9,6 +9,8 @@ CREATE TABLE IF NOT EXISTS users (
     id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
     email         VARCHAR(128) NOT NULL UNIQUE COMMENT '邮箱账号',
     nickname      VARCHAR(64)  NOT NULL COMMENT '昵称',
+    username      VARCHAR(32)  NOT NULL UNIQUE COMMENT '用户自定义ID，用于加好友',
+    community_no  CHAR(6)      NOT NULL UNIQUE COMMENT '系统随机6位社区号',
     avatar_url    VARCHAR(512) DEFAULT '' COMMENT '头像',
     bio           VARCHAR(255) DEFAULT '' COMMENT '个人简介',
     role          TINYINT      DEFAULT 0 COMMENT '0普通用户 1管理员',

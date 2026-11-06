@@ -43,10 +43,10 @@ export function createSearchRouter({ db }) {
       );
       const like = likeParam(q);
       const users = await db.query(
-        `SELECT id, nickname, avatar_url, bio, created_at FROM users
-         WHERE nickname LIKE ? OR email LIKE ?
+        `SELECT id, nickname, username, community_no, avatar_url, bio, created_at FROM users
+         WHERE nickname LIKE ? OR email LIKE ? OR username LIKE ? OR community_no LIKE ?
          ORDER BY id DESC LIMIT 5`,
-        [like, like],
+        [like, like, like, like],
       );
       return res.json({ books: books.map(serializeBook), users: users.map((row) => serializePublicUser(row)) });
     }),
@@ -77,12 +77,12 @@ export function createSearchRouter({ db }) {
       const params = [];
       let whereSql = '';
       if (q) {
-        whereSql = 'WHERE nickname LIKE ? OR email LIKE ?';
+        whereSql = 'WHERE nickname LIKE ? OR email LIKE ? OR username LIKE ? OR community_no LIKE ?';
         const like = likeParam(q);
-        params.push(like, like);
+        params.push(like, like, like, like);
       }
       const rows = await db.query(
-        `SELECT id, nickname, avatar_url, bio, created_at FROM users ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`,
+        `SELECT id, nickname, username, community_no, avatar_url, bio, created_at FROM users ${whereSql} ORDER BY id DESC LIMIT ? OFFSET ?`,
         [...params, Number(size), Number(offset)],
       );
       const countRows = await db.query(`SELECT COUNT(*) AS total FROM users ${whereSql}`, params);

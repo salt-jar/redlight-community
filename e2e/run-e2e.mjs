@@ -133,17 +133,21 @@ async function apiLogin(email) {
   const sendResponse = await fetch(`${serverBase}/api/auth/send-code`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, purpose: 'register' }),
   });
   const sendBody = await sendResponse.json();
   assert(sendResponse.ok, `第二用户验证码发送失败：${JSON.stringify(sendBody)}`);
-  const loginResponse = await fetch(`${serverBase}/api/auth/login`, {
+  const loginResponse = await fetch(`${serverBase}/api/auth/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'user-agent': 'e2e-second-user' },
-    body: JSON.stringify({ email, code: sendBody.devCode }),
+    body: JSON.stringify({
+      email,
+      code: sendBody.devCode,
+      username: `peer_${email.split('@')[0].replace(/[^a-z0-9]/gi, '').slice(-10)}`,
+    }),
   });
   const loginBody = await loginResponse.json();
-  assert(loginResponse.ok, `第二用户登录失败：${JSON.stringify(loginBody)}`);
+  assert(loginResponse.ok, `第二用户注册失败：${JSON.stringify(loginBody)}`);
   return loginBody;
 }
 
@@ -271,10 +275,14 @@ async function main() {
   await page.waitForSelector('[data-testid="login-email"]');
   await shot(page, 'login');
 
-  // 2. 邮箱验证码登录
+  // 2. 注册新账号（登录与注册分离）
   const email = `e2e${Date.now()}@example.com`;
-  log(`登录邮箱：${email}`);
+  const username = `同志_${email.split('@')[0].slice(0, 6)}`;
+  log(`注册邮箱：${email}，用户名 ID：${username}`);
+  await page.click('[data-testid="login-tab-register"]');
+  await page.waitForSelector('[data-testid="register-username"]', { state: 'visible' });
   await fillTestId(page, 'login-email', email);
+  await fillTestId(page, 'register-username', username);
   const sendCodeResponse = page.waitForResponse(
     (response) => response.url().includes('/api/auth/send-code') && response.request().method() === 'POST',
   );
@@ -282,19 +290,22 @@ async function main() {
   const sendResult = await sendCodeResponse;
   const sendBody = await sendResult.json();
   assert(sendResult.status() === 200, `发送验证码应成功，实际 ${sendResult.status()}`);
+  assert(sendBody.purpose === 'register', '注册验证码用途应为 register');
   assert(/^\d{6}$/.test(sendBody.devCode || ''), '开发模式应返回 6 位 devCode');
   await page.waitForSelector('[data-testid="dev-code"]');
   await fillTestId(page, 'login-code', sendBody.devCode);
-  const loginResponse = page.waitForResponse(
-    (response) => response.url().includes('/api/auth/login') && response.request().method() === 'POST',
+  const registerResponse = page.waitForResponse(
+    (response) => response.url().includes('/api/auth/register') && response.request().method() === 'POST',
   );
-  await page.click('[data-testid="login-submit"]');
-  const loginResult = await loginResponse;
-  assert(loginResult.status() === 200, `登录应成功，实际 ${loginResult.status()}`);
-  const loginBody = await loginResult.json();
+  await page.click('[data-testid="auth-submit"]');
+  const registerResult = await registerResponse;
+  assert(registerResult.status() === 200, `注册应成功，实际 ${registerResult.status()}`);
+  const loginBody = await registerResult.json();
+  assert(loginBody.user.username === username, '注册后用户名 ID 应保持一致');
+  assert(/^\d{6}$/.test(loginBody.user.communityNo || ''), '注册后应生成 6 位社区号');
   await page.waitForURL((url) => url.pathname === '/', { timeout: 20000 });
   await page.waitForSelector('[data-testid="composer-trigger"]');
-  log(`登录成功，昵称：${loginBody.user.nickname}，JWT 长度 ${loginBody.token.length}`);
+  log(`注册成功，昵称：${loginBody.user.nickname}，社区号：${loginBody.user.communityNo}`);
   assert((await page.evaluate(() => localStorage.getItem('redlight_token')) || '').length > 20, 'token 应持久化到 localStorage');
 
   // 3. 三栏布局与配色

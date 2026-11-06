@@ -33,6 +33,8 @@ export function serializeUser(row) {
     id: toNumber(row.id),
     email: row.email || '',
     nickname: row.nickname || '',
+    username: row.username || '',
+    communityNo: row.community_no || '',
     avatarUrl: row.avatar_url || '',
     bio: row.bio || '',
     role: toNumber(row.role),
@@ -46,6 +48,8 @@ export function serializePublicUser(row) {
   return {
     id: toNumber(row.id),
     nickname: row.nickname || '',
+    username: row.username || '',
+    communityNo: row.community_no || '',
     avatarUrl: row.avatar_url || '',
     bio: row.bio || '',
     createdAt: toIso(row.created_at),

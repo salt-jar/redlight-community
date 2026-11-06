@@ -84,7 +84,12 @@ npm run dev
 - 前端：<http://127.0.0.1:5173>
 - 后端健康检查：<http://127.0.0.1:3000/api/health> → `{"ok":true,"driver":"sqlite"}`
 
-首次登录：输入任意合法邮箱 → 点击「获取验证码」→ **验证码会打印在后端控制台**，同时登录页在开发模式下会显示 `本地开发模式验证码：xxxxxx`。验证通过后自动注册，昵称为 `同志_<邮箱前缀前 6 位>`。
+登录与注册已分开：
+
+- **注册**：邮箱验证码 + 自定义用户名 ID（4–20 位中文、字母、数字或下划线，不能包含特殊符号），昵称默认与 ID 相同，并自动生成唯一 6 位社区号。
+- **登录**：仅允许已注册邮箱；未注册邮箱会提示先注册，不再自动建号。
+- 用户名 ID 用于加好友与身份识别，注册后不可修改；社区号用于数据库查询，可在个人主页点击复制。
+- 未配置 SMTP 时，**验证码会打印在后端控制台**，登录页在开发模式下也会显示 `本地开发模式验证码：xxxxxx`。
 
 登录后可以点击右上角头像菜单的「编辑资料」，或在个人主页点击「编辑资料」，修改昵称与头像（头像支持 JPG / PNG / GIF / WebP，≤5MB）。
 
@@ -155,6 +160,9 @@ SMTP_FROM=赤光社 <your_email@qq.com>
    mysql -u root -p -e "CREATE DATABASE redlight DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
    mysql -u root -p redlight < server/src/schema/mysql.sql
    ```
+
+   > 从 v1.0.0 及更早版本升级已有 MySQL 数据库（缺少 `username` / `community_no` 字段）时，先执行一次：
+   > `mysql -u root -p redlight < server/src/schema/migrations/001_user_identity.sql`
 
 2. 修改 `.env`：
 
@@ -228,7 +236,7 @@ npm run e2e
 
 脚本会自行在 3101 / 5188 端口启动后端（临时 SQLite）与 Vite，使用无头 Edge 执行：
 
-登录守卫 → 邮箱验证码登录 → 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言。
+登录守卫 → 邮箱验证码注册（自定义 ID / 社区号）→ 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言。
 
 截图与结果保存在 `e2e/screenshots/`（含 `e2e-result.json`）。
 
@@ -249,8 +257,9 @@ npm run build
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/health` | 健康检查 |
-| POST | `/api/auth/send-code` | 发送 6 位验证码（60 秒限流） |
-| POST | `/api/auth/login` | 登录 / 自动注册，返回 7 天 JWT |
+| POST | `/api/auth/send-code` | 发送 6 位验证码（`purpose=login/register`，60 秒限流） |
+| POST | `/api/auth/register` | 邮箱验证码注册（自定义用户名 ID，自动生成社区号） |
+| POST | `/api/auth/login` | 已注册邮箱登录，返回 7 天 JWT |
 | GET | `/api/auth/me` | 当前用户 |
 | GET | `/api/posts?page&size` | 信息流倒序分页 |
 | POST | `/api/posts` | 发帖（≤1000 字、≤9 图） |

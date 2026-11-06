@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { CalendarOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons-vue';
+import { CalendarOutlined, CopyOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons-vue';
+import { message } from 'ant-design-vue';
 import AppShell from '@/components/layout/AppShell.vue';
 import PostCard from '@/components/post/PostCard.vue';
 import PostSkeleton from '@/components/skeleton/PostSkeleton.vue';
@@ -28,6 +29,16 @@ const loadingMore = ref(false);
 const error = ref('');
 
 const isSelf = computed(() => Boolean(user.value && auth.user && user.value.id === auth.user.id));
+
+async function copyText(value: string, label: string) {
+  if (!value) return;
+  try {
+    await navigator.clipboard.writeText(value);
+    message.success(`${label}已复制`);
+  } catch {
+    message.info(value);
+  }
+}
 
 async function load(targetPage = 1, replace = true) {
   if (replace) loading.value = true;
@@ -101,6 +112,26 @@ watch(
           <div class="name-row">
             <h1 class="profile-name" data-testid="profile-nickname">{{ user.nickname }}</h1>
             <span v-if="isSelf" class="self-badge">我的主页</span>
+          </div>
+          <div class="profile-identity">
+            <button
+              class="identity-chip"
+              type="button"
+              title="点击复制用户名 ID"
+              @click="copyText(user.username || '', '用户名 ID')"
+            >
+              @{{ user.username || '未设置' }}
+              <CopyOutlined />
+            </button>
+            <button
+              class="identity-chip community"
+              type="button"
+              title="点击复制社区号"
+              @click="copyText(user.communityNo || '', '社区号')"
+            >
+              社区号 {{ user.communityNo || '—' }}
+              <CopyOutlined />
+            </button>
           </div>
           <p class="profile-bio">{{ user.bio || '这位同志还没有填写简介。' }}</p>
           <p class="profile-join">
@@ -217,6 +248,44 @@ watch(
   color: var(--rl-primary);
   font-size: 11px;
   line-height: 18px;
+}
+
+.profile-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.identity-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border: 1px solid var(--rl-border);
+  border-radius: 10px;
+  background: #fbf9f5;
+  color: var(--rl-text-tertiary);
+  font-family: var(--rl-sans);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.identity-chip:hover {
+  border-color: #f0c9cf;
+  background: #fff8f7;
+  color: var(--rl-primary);
+}
+
+.identity-chip.community {
+  color: #946b2d;
+  border-color: #f0e2c8;
+  background: #fdf8ee;
+}
+
+.identity-chip :deep(svg) {
+  font-size: 10px;
+  opacity: 0.7;
 }
 
 .profile-bio {

@@ -39,6 +39,27 @@ server/data/redlight.db-shm
 | `status` | TINYINT | `1` 成功，`0` 失败 |
 | `created_at` | DATETIME | 登录时间（数据库存储为 UTC） |
 
+### 用户身份字段（`users`）
+
+| 字段 | 含义 |
+| --- | --- |
+| `username` | 用户注册时自定义的唯一 ID（4–20 位中文、字母、数字、下划线），用于加好友与身份识别，注册后不可修改 |
+| `community_no` | 系统随机生成的唯一 6 位社区号，主要用于数据库查询 |
+| `nickname` | 展示昵称，注册时默认等于用户名 ID，之后可在「编辑资料」中修改 |
+| `avatar_url` | 头像地址 |
+
+```sql
+-- 按社区号查询用户
+SELECT id, nickname, username, community_no, created_at
+FROM users
+WHERE community_no = '123456';
+
+-- 按用户名 ID 查询
+SELECT id, nickname, username, community_no
+FROM users
+WHERE username = 'redstar_2026';
+```
+
 ### 可读视图 `login_log_details`
 
 把 `login_logs` 与 `users` 关联，直接给出昵称、可读状态和本地时间：

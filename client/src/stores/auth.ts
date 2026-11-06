@@ -1,6 +1,6 @@
 import { computed, ref } from 'vue';
 import { defineStore } from 'pinia';
-import { apiLogin, apiMe, apiSendCode, type SendCodeResult } from '@/api/auth';
+import { apiLogin, apiMe, apiRegister, apiSendCode, type SendCodeResult } from '@/api/auth';
 import { clearAuthStorage, TOKEN_KEY, USER_KEY } from '@/api/http';
 import type { User } from '@/types';
 
@@ -26,12 +26,20 @@ export const useAuthStore = defineStore('auth', () => {
     else localStorage.removeItem(USER_KEY);
   }
 
-  async function sendCode(email: string): Promise<SendCodeResult> {
-    return apiSendCode(email);
+  async function sendCode(email: string, purpose: 'login' | 'register' = 'login'): Promise<SendCodeResult> {
+    return apiSendCode(email, purpose);
   }
 
   async function login(email: string, code: string) {
     const data = await apiLogin(email, code);
+    token.value = data.token;
+    user.value = data.user;
+    persist();
+    return data;
+  }
+
+  async function register(payload: { email: string; code: string; username: string }) {
+    const data = await apiRegister(payload);
     token.value = data.token;
     user.value = data.user;
     persist();
@@ -57,5 +65,5 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuthStorage();
   }
 
-  return { token, user, isLoggedIn, displayName, sendCode, login, fetchMe, setUser, logout };
+  return { token, user, isLoggedIn, displayName, sendCode, login, register, fetchMe, setUser, logout };
 });

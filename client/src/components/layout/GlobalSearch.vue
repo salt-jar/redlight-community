@@ -119,7 +119,9 @@ onBeforeUnmount(() => {
               <span class="user-thumb">{{ (user.nickname || '同').slice(0, 1) }}</span>
               <span class="result-meta">
                 <span class="result-name">{{ user.nickname }}</span>
-                <span class="result-desc">{{ user.bio || '赤光社同志' }}</span>
+                <span class="result-desc">
+                  @{{ user.username || '—' }}<template v-if="user.communityNo"> · 社区号 {{ user.communityNo }}</template>
+                </span>
               </span>
             </button>
           </section>

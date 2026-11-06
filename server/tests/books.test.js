@@ -45,7 +45,7 @@ describe('图书 ZIP 上传、安全解压与下载', () => {
     expect(book.status).toBe(1);
     expect(book.coverUrl).toBeTruthy();
     expect(book.coverUrl).toMatch(/cover\.png$/);
-    expect(book.uploader.nickname).toBe('同志_librar');
+    expect(book.uploader.nickname).toBe('同志_librarian');
 
     const rows = await ctx.deps.db.query('SELECT * FROM books');
     expect(rows).toHaveLength(1);
@@ -84,7 +84,7 @@ describe('图书 ZIP 上传、安全解压与下载', () => {
     const detail = await ctx.agent.get(`/api/books/${id}`);
     expect(detail.status).toBe(200);
     expect(detail.body.book.title).toBe('列宁笔记');
-    expect(detail.body.book.uploader.nickname).toBe('同志_librar');
+    expect(detail.body.book.uploader.nickname).toBe('同志_librarian');
     expect(detail.body.book.description).toBe('测试图书');
   });
 

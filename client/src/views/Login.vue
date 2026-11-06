@@ -1,27 +1,62 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue';
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { LockOutlined, MailOutlined, SafetyCertificateOutlined } from '@ant-design/icons-vue';
+import {
+  IdcardOutlined,
+  LockOutlined,
+  MailOutlined,
+  SafetyCertificateOutlined,
+  UserAddOutlined,
+} from '@ant-design/icons-vue';
 import { message } from 'ant-design-vue';
 import { apiErrorMessage } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
 import { isValidEmail } from '@/utils/validate';
 
+type AuthMode = 'login' | 'register';
+const USERNAME_RE = /^[A-Za-z0-9_\u4e00-\u9fa5]{4,20}$/;
+
 const router = useRouter();
 const route = useRoute();
 const auth = useAuthStore();
 
+const mode = ref<AuthMode>('login');
 const email = ref('');
 const code = ref('');
+const username = ref('');
 const sending = ref(false);
-const loggingIn = ref(false);
+const submitting = ref(false);
 const countdown = ref(0);
 const error = ref('');
 const devCode = ref('');
 let timer: ReturnType<typeof setInterval> | null = null;
 
+const usernameValid = computed(() => USERNAME_RE.test(username.value));
+const usernameError = computed(
+  () => mode.value === 'register' && Boolean(username.value) && !usernameValid.value,
+);
 const canSend = computed(() => countdown.value === 0 && !sending.value && isValidEmail(email.value));
-const canLogin = computed(() => isValidEmail(email.value) && /^\d{6}$/.test(code.value) && !loggingIn.value);
+const canSubmit = computed(
+  () =>
+    isValidEmail(email.value) &&
+    /^\d{6}$/.test(code.value) &&
+    !submitting.value &&
+    (mode.value === 'login' || usernameValid.value),
+);
+
+// 从输入源头过滤特殊符号 / 空格，只保留中文、字母、数字、下划线
+watch(username, (value) => {
+  const cleaned = value.replace(/[^A-Za-z0-9_\u4e00-\u9fa5]/g, '').slice(0, 20);
+  if (cleaned !== value) username.value = cleaned;
+});
+
+function switchMode(next: AuthMode) {
+  if (mode.value === next) return;
+  mode.value = next;
+  code.value = '';
+  error.value = '';
+  devCode.value = '';
+}
 
 function startCountdown(seconds: number) {
   countdown.value = Math.max(1, Math.floor(seconds));
@@ -45,7 +80,7 @@ async function sendCode() {
   sending.value = true;
   error.value = '';
   try {
-    const result = await auth.sendCode(email.value.trim());
+    const result = await auth.sendCode(email.value.trim(), mode.value);
     devCode.value = result.devCode || '';
     startCountdown(result.cooldown || 60);
     message.success('验证码已发送，请查收邮箱');
@@ -56,7 +91,7 @@ async function sendCode() {
   }
 }
 
-async function login() {
+async function submit() {
   if (!isValidEmail(email.value)) {
     error.value = '请输入正确的邮箱地址';
     return;
@@ -65,17 +100,30 @@ async function login() {
     error.value = '请输入 6 位数字验证码';
     return;
   }
-  loggingIn.value = true;
+  if (mode.value === 'register' && !usernameValid.value) {
+    error.value = '用户名 ID 需为 4–20 位中文、字母、数字或下划线';
+    return;
+  }
+  submitting.value = true;
   error.value = '';
   try {
-    await auth.login(email.value.trim(), code.value.trim());
-    message.success('欢迎回来，同志');
+    if (mode.value === 'login') {
+      await auth.login(email.value.trim(), code.value.trim());
+      message.success('欢迎回来，同志');
+    } else {
+      const result = await auth.register({
+        email: email.value.trim(),
+        code: code.value.trim(),
+        username: username.value.trim(),
+      });
+      message.success(`注册成功，你的社区号：${result.user.communityNo}`);
+    }
     const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/';
     await router.replace(redirect.startsWith('/') ? redirect : '/');
   } catch (err) {
     error.value = apiErrorMessage(err);
   } finally {
-    loggingIn.value = false;
+    submitting.value = false;
   }
 }
 
@@ -125,10 +173,37 @@ onBeforeUnmount(() => {
       </section>
 
       <section class="login-card">
-        <h2 class="card-title">登录 / 注册</h2>
-        <p class="card-subtitle">未注册的邮箱验证后将自动创建账号</p>
+        <div class="auth-tabs" role="tablist" aria-label="登录或注册">
+          <button
+            class="auth-tab"
+            :class="{ active: mode === 'login' }"
+            type="button"
+            role="tab"
+            :aria-selected="mode === 'login'"
+            data-testid="login-tab-login"
+            @click="switchMode('login')"
+          >
+            登录
+          </button>
+          <button
+            class="auth-tab"
+            :class="{ active: mode === 'register' }"
+            type="button"
+            role="tab"
+            :aria-selected="mode === 'register'"
+            data-testid="login-tab-register"
+            @click="switchMode('register')"
+          >
+            注册
+          </button>
+        </div>
 
-        <form class="login-form" @submit.prevent="login">
+        <h2 class="card-title">{{ mode === 'login' ? '欢迎回来' : '加入赤光社' }}</h2>
+        <p class="card-subtitle">
+          {{ mode === 'login' ? '使用已注册的邮箱验证码登录' : '设置独一无二的用户名 ID，与同志们建立联系' }}
+        </p>
+
+        <form class="login-form" @submit.prevent="submit">
           <label class="field">
             <span class="field-label">邮箱</span>
             <a-input
@@ -167,21 +242,40 @@ onBeforeUnmount(() => {
             </div>
           </label>
 
+          <label v-if="mode === 'register'" class="field">
+            <span class="field-label">
+              用户名 ID
+              <em class="field-tag">用于添加好友</em>
+            </span>
+            <a-input
+              v-model:value="username"
+              size="large"
+              placeholder="例如：redstar_2026 或 红星读者"
+              :maxlength="20"
+              data-testid="register-username"
+            >
+              <template #prefix><IdcardOutlined class="field-icon" /></template>
+            </a-input>
+            <span class="field-hint">4–20 位中文、字母、数字或下划线，注册后不可修改</span>
+            <span v-if="usernameError" class="field-error">不能包含空格或特殊符号，且至少 4 个字符</span>
+          </label>
+
           <p v-if="devCode" class="dev-code" data-testid="dev-code">
             本地开发模式验证码：<strong>{{ devCode }}</strong>
           </p>
 
           <p v-if="error" class="login-error" data-testid="login-error">{{ error }}</p>
 
-          <button class="login-btn" type="submit" :disabled="!canLogin" data-testid="login-submit">
-            <LockOutlined />
-            {{ loggingIn ? '登录中...' : '登 录 / 注 册' }}
+          <button class="login-btn" type="submit" :disabled="!canSubmit" data-testid="auth-submit">
+            <UserAddOutlined v-if="mode === 'register'" />
+            <LockOutlined v-else />
+            {{ submitting ? (mode === 'login' ? '登录中...' : '注册中...') : mode === 'login' ? '登 录' : '注册并进入赤光社' }}
           </button>
         </form>
 
         <div class="login-note">
           <span class="note-line"></span>
-          <p>邮箱仅用于登录与身份识别，不会公开展示</p>
+          <p>{{ mode === 'login' ? '邮箱仅用于登录与身份识别，不会公开展示' : '注册后系统会生成唯一 6 位社区号，可用于数据库查询' }}</p>
           <span class="note-line"></span>
         </div>
       </section>
@@ -306,6 +400,40 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 32px rgba(80, 40, 20, 0.1);
 }
 
+.auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  margin-bottom: 18px;
+  padding: 4px;
+  border-radius: 8px;
+  background: #fbf9f5;
+  border: 1px solid var(--rl-border);
+}
+
+.auth-tab {
+  height: 34px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--rl-text-secondary);
+  font-family: var(--rl-sans);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.auth-tab:hover {
+  color: var(--rl-primary);
+}
+
+.auth-tab.active {
+  background: #fff;
+  color: var(--rl-primary);
+  font-weight: 600;
+  box-shadow: 0 1px 4px rgba(80, 40, 20, 0.08);
+}
+
 .card-title {
   margin: 0;
   color: var(--rl-text);
@@ -335,6 +463,33 @@ onBeforeUnmount(() => {
   margin-bottom: 5px;
   color: var(--rl-text-tertiary);
   font-size: 13px;
+}
+
+.field-tag {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 3px;
+  background: #fff1f0;
+  color: var(--rl-primary);
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 400;
+  line-height: 17px;
+}
+
+.field-hint {
+  display: block;
+  margin-top: 4px;
+  color: var(--rl-text-secondary);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.field-error {
+  display: block;
+  margin-top: 3px;
+  color: var(--rl-primary);
+  font-size: 11px;
 }
 
 .field-icon {

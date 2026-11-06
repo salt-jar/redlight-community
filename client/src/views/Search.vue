@@ -203,6 +203,10 @@ watch(
               <div class="user-info">
                 <span class="user-name">{{ user.nickname }}</span>
                 <span class="user-bio">{{ user.bio || '赤光社同志' }}</span>
+                <span class="user-handle">
+                  @{{ user.username || '—' }}
+                  <template v-if="user.communityNo"> · 社区号 {{ user.communityNo }}</template>
+                </span>
               </div>
               <span class="user-arrow">查看主页 →</span>
             </button>
@@ -360,6 +364,14 @@ watch(
   overflow: hidden;
   color: var(--rl-text-secondary);
   font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.user-handle {
+  overflow: hidden;
+  color: #b3a489;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }

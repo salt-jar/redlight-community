@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
     email         TEXT    NOT NULL UNIQUE,
     nickname      TEXT    NOT NULL,
+    username      TEXT    NOT NULL COLLATE NOCASE UNIQUE,
+    community_no  TEXT    NOT NULL UNIQUE,
     avatar_url    TEXT    DEFAULT '',
     bio           TEXT    DEFAULT '',
     role          INTEGER DEFAULT 0,

@@ -2,6 +2,8 @@ export interface User {
   id: number;
   email?: string;
   nickname: string;
+  username?: string;
+  communityNo?: string;
   avatarUrl: string;
   bio: string;
   role?: number;

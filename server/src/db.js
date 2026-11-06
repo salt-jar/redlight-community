@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomCommunityNo, sanitizeUsernameSource } from './utils/identity.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEMA_DIR = path.join(__dirname, 'schema');
@@ -23,6 +24,7 @@ async function createSqliteDb(config) {
   sqlite.pragma('journal_mode = WAL');
   sqlite.pragma('foreign_keys = ON');
   sqlite.exec(fs.readFileSync(path.join(SCHEMA_DIR, 'sqlite.sql'), 'utf8'));
+  ensureSqliteUserIdentity(sqlite);
 
   const normalize = (params = []) =>
     params.map((value) => {
@@ -48,8 +50,58 @@ async function createSqliteDb(config) {
   };
 }
 
-async function createMysqlDb(config) {
-  const mysql = await import('mysql2/promise');
+function ensureSqliteUserIdentity(sqlite) {
+  const columns = new Set(sqlite.prepare("PRAGMA table_info('users')").all().map((column) => column.name));
+  if (!columns.has('username')) {
+    sqlite.exec('ALTER TABLE users ADD COLUMN username TEXT COLLATE NOCASE');
+  }
+  if (!columns.has('community_no')) {
+    sqlite.exec('ALTER TABLE users ADD COLUMN community_no TEXT');
+  }
+
+  const rows = sqlite.prepare('SELECT id, email, nickname, username, community_no FROM users').all();
+  const seenUsernames = new Set();
+  const seenCommunityNos = new Set();
+  const update = sqlite.prepare('UPDATE users SET username = ?, community_no = ? WHERE id = ?');
+
+  for (const row of rows) {
+    let username = row.username ? String(row.username).trim() : '';
+    let communityNo = row.community_no ? String(row.community_no).trim() : '';
+
+    // 缺失、非法或大小写重复的旧用户名：重新生成唯一值
+    if (
+      !/^[A-Za-z0-9_\u4e00-\u9fa5]{4,20}$/.test(username) ||
+      seenUsernames.has(username.toLowerCase())
+    ) {
+      const base = sanitizeUsernameSource(row.nickname || String(row.email || '').split('@')[0], row.id);
+      let candidate = base;
+      let suffix = 1;
+      while (seenUsernames.has(candidate.toLowerCase())) {
+        const suffixText = `_${row.id}${suffix > 1 ? suffix : ''}`;
+        candidate = `${Array.from(base).slice(0, Math.max(1, 20 - suffixText.length)).join('')}${suffixText}`;
+        suffix += 1;
+      }
+      username = candidate;
+    }
+    seenUsernames.add(username.toLowerCase());
+
+    if (!/^\d{6}$/.test(communityNo) || seenCommunityNos.has(communityNo)) {
+      do {
+        communityNo = randomCommunityNo();
+      } while (seenCommunityNos.has(communityNo));
+    }
+    seenCommunityNos.add(communityNo);
+
+    if (username !== row.username || communityNo !== row.community_no) {
+      update.run(username, communityNo, row.id);
+    }
+  }
+
+  sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS uk_users_username ON users(username)');
+  sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS uk_users_community_no ON users(community_no)');
+}
+
+async function createMysqlDb(config) {  const mysql = await import('mysql2/promise');
   const pool = mysql.createPool({
     host: config.mysql.host,
     port: config.mysql.port,

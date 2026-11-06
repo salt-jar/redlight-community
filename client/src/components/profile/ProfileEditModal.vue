@@ -117,6 +117,19 @@ async function save() {
         </button>
       </header>
 
+      <div class="identity-strip">
+        <div class="identity-cell">
+          <span class="identity-label">用户名 ID</span>
+          <strong class="identity-value">@{{ auth.user?.username || '—' }}</strong>
+          <span class="identity-note">用于添加好友，注册后不可修改</span>
+        </div>
+        <div class="identity-cell">
+          <span class="identity-label">社区号</span>
+          <strong class="identity-value">{{ auth.user?.communityNo || '—' }}</strong>
+          <span class="identity-note">系统生成，可用于数据库查询</span>
+        </div>
+      </div>
+
       <div class="avatar-section">
         <div class="avatar-preview" data-testid="avatar-preview">
           <UserAvatar :user="previewUser" :size="76" />
@@ -246,6 +259,45 @@ async function save() {
   gap: 18px;
   padding: 18px 0;
   border-bottom: 1px solid var(--rl-border-light);
+}
+
+.identity-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  margin-top: 14px;
+  overflow: hidden;
+  border: 1px solid var(--rl-border-light);
+  border-radius: 6px;
+  background: var(--rl-border-light);
+}
+
+.identity-cell {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 9px 12px;
+  background: #fbf9f5;
+}
+
+.identity-label {
+  color: var(--rl-text-secondary);
+  font-size: 11px;
+}
+
+.identity-value {
+  overflow: hidden;
+  color: var(--rl-text);
+  font-size: 14px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-note {
+  color: #b3a489;
+  font-size: 10px;
+  line-height: 1.5;
 }
 
 .avatar-preview {

@@ -61,7 +61,7 @@ describe('全局搜索（图书 + 用户）', () => {
     expect(byNickname.body.users.some((user) => user.nickname === '红星照耀')).toBe(true);
 
     const byEmail = await ctx.agent.get('/api/search?q=beta-reader');
-    expect(byEmail.body.users.some((user) => user.nickname === '同志_beta-r')).toBe(true);
+    expect(byEmail.body.users.some((user) => user.nickname === '同志_betareader')).toBe(true);
   });
 
   it('综合搜索图书与用户各最多 5 条', async () => {

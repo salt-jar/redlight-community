@@ -44,11 +44,18 @@ export async function createTestContext(name, overrides = {}) {
   const agent = request(app);
 
   async function register(email = 'reader@example.com', code = '123456') {
+    const local =
+      email
+        .toLowerCase()
+        .split('@')[0]
+        .replace(/[^a-z0-9_\u4e00-\u9fa5]/g, '')
+        .slice(0, 15) || 'user';
+    const username = `同志_${local}`;
     await deps.cache.set(`email:code:${email.toLowerCase()}`, code, 300);
     const response = await agent
-      .post('/api/auth/login')
+      .post('/api/auth/register')
       .set('User-Agent', 'vitest-agent/1.0')
-      .send({ email, code });
+      .send({ email, code, username });
     if (response.status !== 200) {
       throw new Error(`register failed: ${response.status} ${JSON.stringify(response.body)}`);
     }
