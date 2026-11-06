@@ -55,10 +55,12 @@
 ├── scripts/
 │   ├── dev.mjs                # 一键启动前后端
 │   └── generate-fixtures.py   # 生成测试用 PDF / EPUB
+├── server/scripts/show-logins.mjs  # 登录数据库查看工具
 ├── docker-compose.yml
 ├── nginx.conf
 ├── .env.example
 ├── .dockerignore
+├── DATABASE.md                # 登录数据库使用指南
 ├── TEST-REPORT.md             # 验收报告（对照 checklist.md）
 └── README.md
 ```
@@ -102,6 +104,24 @@ npm run dev
 - SQLite：`server/data/redlight.db`（首次启动自动建表）
 - 上传文件：`server/uploads/`（`books/`、`images/`、`temp/`）
 - 上传默认上限：图片 5MB、图书 ZIP 100MB
+
+---
+
+## 查看登录数据库（SQL）
+
+所有登录尝试（成功 / 失败）都会写入 SQL 表 `login_logs`，并提供 `login_log_details`（可读明细）与 `login_stats_daily`（按天统计）两个视图。
+
+```powershell
+# 最近 20 条登录记录
+npm run logins
+
+# 只看失败记录、按邮箱筛选、附带按天统计
+npm run logins -- --status fail
+npm run logins -- --email reader@example.com
+npm run logins -- --stats
+```
+
+SQLite 文件位置：`server/data/redlight.db`。完整字段说明、图形工具、常用 SQL、MySQL / Docker 查询和备份方法见 **[DATABASE.md](DATABASE.md)**。
 
 ---
 

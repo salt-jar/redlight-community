@@ -93,3 +93,30 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at DATETIME    DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_created_at (created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊消息';
+
+-- 登录明细视图：关联用户昵称，输出可读状态与本地时间（数据库时区即本地时区）
+CREATE OR REPLACE VIEW login_log_details AS
+SELECT
+    l.id,
+    l.user_id,
+    COALESCE(u.nickname, '未注册用户') AS nickname,
+    l.email,
+    l.login_ip,
+    l.user_agent,
+    CASE l.status WHEN 1 THEN '成功' ELSE '失败' END AS status_text,
+    l.status,
+    l.created_at,
+    l.created_at AS created_at_local
+FROM login_logs l
+LEFT JOIN users u ON u.id = l.user_id;
+
+-- 每日登录统计视图：成功 / 失败 / 独立邮箱数
+CREATE OR REPLACE VIEW login_stats_daily AS
+SELECT
+    DATE(l.created_at) AS login_date,
+    COUNT(*) AS total_count,
+    SUM(CASE WHEN l.status = 1 THEN 1 ELSE 0 END) AS success_count,
+    SUM(CASE WHEN l.status = 0 THEN 1 ELSE 0 END) AS fail_count,
+    COUNT(DISTINCT l.email) AS unique_emails
+FROM login_logs l
+GROUP BY DATE(l.created_at);

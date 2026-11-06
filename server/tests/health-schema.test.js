@@ -68,12 +68,38 @@ describe('健康检查与数据库 schema', () => {
     expect(mysqlTables.get('books')).toContain('download_count');
   });
 
+  it('登录明细与按天统计视图可用', async () => {
+    const views = await ctx.deps.db.query("SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name");
+    expect(views.map((view) => view.name)).toEqual(['login_log_details', 'login_stats_daily']);
+
+    await ctx.deps.db.query(
+      'INSERT INTO login_logs (user_id, email, login_ip, user_agent, status) VALUES (0, ?, ?, ?, 0)',
+      ['view-test@example.com', '127.0.0.1', 'vitest-ua'],
+    );
+    const details = await ctx.deps.db.query(
+      'SELECT nickname, status_text, created_at_local FROM login_log_details WHERE email = ?',
+      ['view-test@example.com'],
+    );
+    expect(details).toHaveLength(1);
+    expect(details[0].nickname).toBe('未注册用户');
+    expect(details[0].status_text).toBe('失败');
+    expect(details[0].created_at_local).toBeTruthy();
+
+    const stats = await ctx.deps.db.query('SELECT * FROM login_stats_daily');
+    expect(stats).toHaveLength(1);
+    expect(Number(stats[0].total_count)).toBe(1);
+    expect(Number(stats[0].success_count)).toBe(0);
+    expect(Number(stats[0].fail_count)).toBe(1);
+  });
+
   it('FULLTEXT ngram 仅存在于 MySQL schema', () => {
     const mysqlSql = fs.readFileSync(path.join(schemaDir, 'mysql.sql'), 'utf8');
     const sqliteSql = fs.readFileSync(path.join(schemaDir, 'sqlite.sql'), 'utf8');
     expect(mysqlSql).toMatch(/FULLTEXT INDEX ft_book_search[\s\S]*WITH PARSER ngram/);
     expect(sqliteSql).not.toMatch(/FULLTEXT\s+INDEX/i);
     expect(sqliteSql).not.toMatch(/WITH PARSER/i);
+    expect(mysqlSql).toMatch(/CREATE OR REPLACE VIEW login_log_details/);
+    expect(mysqlSql).toMatch(/CREATE OR REPLACE VIEW login_stats_daily/);
     expect(mysqlSql).toMatch(/idx_repost_id/);
     expect(sqliteSql).toMatch(/idx_posts_repost_id/);
   });

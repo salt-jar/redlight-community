@@ -10,7 +10,7 @@
 
 | 测试层 | 命令 | 结果 |
 | --- | --- | --- |
-| 后端集成测试 | `npm run test:server` | **8 个测试文件 / 51 个用例全部通过** |
+| 后端集成测试 | `npm run test:server` | **8 个测试文件 / 52 个用例全部通过** |
 | 前端单元测试 | `npm run test:client` | **6 个测试文件 / 21 个用例全部通过** |
 | 端到端测试 | `npm run e2e` | **全流程通过**，13 张截图，0 页面异常，0 控制台错误 |
 | 前端类型检查 | `vue-tsc --noEmit` | 通过 |
@@ -19,14 +19,16 @@
 | Docker Compose 静态校验 | PyYAML 解析 + `deployment.test.js` | 通过（本机无 Docker，按方案做静态校验） |
 
 > 环境限制说明：本机无 Docker / MySQL / Redis / SMTP。因此 MySQL 与 Redis 分支通过 schema 静态一致性、SQL 分支代码与环境切换测试验证；本地全流程以 `DB_DRIVER=sqlite` + 内存缓存 + console 邮件模式完成，符合 `spec.md` 的「环境适配」约定。
+>
+> 登录数据增强：新增 `login_log_details` / `login_stats_daily` 视图与 `npm run logins` 命令行查看工具，覆盖视图创建、读取与每日统计测试；使用说明见 [DATABASE.md](DATABASE.md)。
 
 ## 二、测试结果明细
 
-### 1. 后端（51 个用例）
+### 1. 后端（52 个用例）
 
 | 测试文件 | 用例数 | 覆盖点 |
 | --- | --- | --- |
-| `health-schema.test.js` | 5 | 健康检查、API 404、默认 100MB 限制、MySQL/SQLite 字段一致性、`posts.repost_id`、ngram 仅 MySQL |
+| `health-schema.test.js` | 6 | 健康检查、API 404、默认 100MB 限制、MySQL/SQLite 字段一致性、`posts.repost_id`、ngram 仅 MySQL、登录明细 / 按天统计视图 |
 | `auth.test.js` | 9 | 6 位验证码 / 5 分钟 / 60 秒 429、失败日志、过期日志、自动注册昵称、7 天 JWT、验证码一次性、401 |
 | `posts.test.js` | 8 | 倒序分页、1000 字 / 9 图校验、点赞幂等、评论计数、转发引用、点赞态、404 |
 | `books.test.js` | 10 | 合法 PDF / EPUB 上架、封面提取、临时文件清理、分类分页、文件流、下载计数、路径穿越 / 可执行文件 / 无书 / 非 ZIP / 缺书名 / 超限 413、未授权 |
@@ -133,7 +135,7 @@
 cd 赤光社
 npm run install:all
 
-# 后端 51 用例
+# 后端 52 用例
 npm run test:server
 
 # 前端 21 用例
