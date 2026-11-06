@@ -61,6 +61,7 @@
 ├── .env.example
 ├── .dockerignore
 ├── DATABASE.md                # 登录数据库使用指南
+├── RELEASE_NOTES.md           # v1.0.0 发布说明与本地完整运行指南
 ├── TEST-REPORT.md             # 验收报告（对照 checklist.md）
 └── README.md
 ```
@@ -303,6 +304,16 @@ Socket.IO：连接时 `auth.token` 携带 JWT；发送 `chat:send` `{ type: 1|2,
 4. **端口被占用**：修改 `.env` 中 `PORT`，并同步设置前端 `VITE_PROXY_TARGET`；Vite 端口可用 `npm run dev -- --port 5174`。
 5. **E2E 无法启动浏览器**：确认 Microsoft Edge 已安装；脚本使用 `channel: 'msedge'`，不会下载额外浏览器。
 6. **Docker 首次启动 MySQL 很慢**：等待 healthcheck 通过；如 schema 未执行，检查 `docker compose logs mysql`。
+
+---
+
+## 十一、版本发布
+
+当前版本：**v1.0.0**。
+
+- 完整发布说明（功能清单、环境依赖、本地运行全部功能的命令、Docker、测试、环境变量）：[RELEASE_NOTES.md](RELEASE_NOTES.md)
+- 验收结果：[TEST-REPORT.md](TEST-REPORT.md)
+- 登录数据库使用：[DATABASE.md](DATABASE.md)
 
 ---
 

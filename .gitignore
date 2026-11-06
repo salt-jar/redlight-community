@@ -1,0 +1,30 @@
+# 依赖
+node_modules/
+.npm-cache/
+
+# 构建产物
+dist/
+client/dist/
+client/.tmp/
+client/.vite/
+
+# 本地运行数据（不要提交数据库与上传文件）
+server/data/
+server/uploads/
+server/uploads-*/
+server/tests/.tmp/
+e2e/.tmp/
+*.db
+*.db-wal
+*.db-shm
+
+# 本地环境与密钥
+.env
+.env.local
+.env.*.local
+
+# 日志与系统文件
+*.log
+Thumbs.db
+desktop.ini
+.DS_Store
