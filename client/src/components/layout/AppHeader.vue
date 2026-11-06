@@ -31,6 +31,8 @@ function onMenuClick(info: { key: string | number }) {
   const key = String(info.key);
   if (key === 'profile') {
     if (auth.user) void router.push(`/profile/${auth.user.id}`);
+  } else if (key === 'edit-profile') {
+    ui.openProfileEditor();
   } else if (key === 'upload') {
     goUpload();
   } else if (key === 'logout') {
@@ -85,6 +87,7 @@ function onMenuClick(info: { key: string | number }) {
               </div>
               <a-menu-divider />
               <a-menu-item key="profile">个人主页</a-menu-item>
+              <a-menu-item key="edit-profile">编辑资料</a-menu-item>
               <a-menu-item key="upload">上传图书</a-menu-item>
               <a-menu-divider />
               <a-menu-item key="logout" danger>退出登录</a-menu-item>

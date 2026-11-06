@@ -10,9 +10,9 @@
 
 | 测试层 | 命令 | 结果 |
 | --- | --- | --- |
-| 后端集成测试 | `npm run test:server` | **8 个测试文件 / 52 个用例全部通过** |
+| 后端集成测试 | `npm run test:server` | **8 个测试文件 / 54 个用例全部通过** |
 | 前端单元测试 | `npm run test:client` | **6 个测试文件 / 21 个用例全部通过** |
-| 端到端测试 | `npm run e2e` | **全流程通过**，13 张截图，0 页面异常，0 控制台错误 |
+| 端到端测试 | `npm run e2e` | **全流程通过**，15 张截图，0 页面异常，0 控制台错误 |
 | 前端类型检查 | `vue-tsc --noEmit` | 通过 |
 | 生产构建 | `vite build` | 通过（3465+ 模块） |
 | 一键开发启动 | `npm run dev` | 通过（后端 3000 健康检查、前端 5173 均正常） |
@@ -24,7 +24,7 @@
 
 ## 二、测试结果明细
 
-### 1. 后端（52 个用例）
+### 1. 后端（54 个用例）
 
 | 测试文件 | 用例数 | 覆盖点 |
 | --- | --- | --- |
@@ -34,7 +34,7 @@
 | `books.test.js` | 10 | 合法 PDF / EPUB 上架、封面提取、临时文件清理、分类分页、文件流、下载计数、路径穿越 / 可执行文件 / 无书 / 非 ZIP / 缺书名 / 超限 413、未授权 |
 | `search.test.js` | 5 | 中文图书（SQLite LIKE）、作者 / 简介、昵称 / 邮箱、各 5 条、分页、分类、排除未上架 |
 | `chat.test.js` | 5 | 无效 token 拒绝、多标签去重、双人在线、文字广播落库、图片消息 / 非法地址 / 空消息、最近 50 条与 beforeId 分页 |
-| `users-stats.test.js` | 5 | 用户主页分页、热榜排序与 60s 缓存、发帖后缓存失效、社区真实统计、在线空列表 |
+| `users-stats.test.js` | 7 | 用户主页分页、热榜排序与 60s 缓存、发帖后缓存失效、社区真实统计、在线空列表、修改昵称 / 头像及参数校验 |
 | `deployment.test.js` | 4 | Compose 服务 / 数据卷、Nginx 100M + `/api` `/uploads` `/socket.io` 代理 + SPA 回退、Dockerfile、`.env.example` 与 README 要点 |
 
 ### 2. 前端（21 个用例）
@@ -59,6 +59,7 @@
 → ZIP 上传 EPUB → epub.js 渲染并切到第二章
 → 图书库分类筛选 → 全局搜索（图书 / 用户 Tab）
 → 群聊（双用户实时消息、在线人数 2）→ 个人主页
+→ 编辑昵称 / 上传头像 → 保存并校验顶栏、主页与动态作者同步
 → 900px 两栏 → 375px 单栏 + 底部 Tab / 横向溢出检查
 → 移动端搜索入口 → 移动端结果页
 ```
@@ -76,9 +77,11 @@
 | `07-search-results.png` | 搜索结果页用户 Tab |
 | `08-chat.png` / `09-chat-two-users.png` | 群聊、双用户在线 |
 | `10-profile.png` | 个人主页与动态 |
-| `11-responsive-900.png` | 900px 两栏 |
-| `12-responsive-375.png` | 375px 单栏 + 底部 Tab |
-| `13-mobile-search.png` | 375px 移动端搜索入口与结果页 |
+| `11-profile-edit.png` | 编辑昵称 / 上传头像弹窗 |
+| `12-profile-updated.png` | 保存后顶栏、主页与动态作者同步 |
+| `13-responsive-900.png` | 900px 两栏 |
+| `14-responsive-375.png` | 375px 单栏 + 底部 Tab |
+| `15-mobile-search.png` | 375px 移动端搜索入口与结果页 |
 | `e2e-result.json` | 本次 E2E 结果（邮箱、昵称、截图列表、错误列表为空） |
 
 ## 三、checklist.md 逐项核对
@@ -112,6 +115,7 @@
 | 25 | 文字 / 图片消息落库广播、最近 50 / 上翻 | ✅ | `chat.test.js`；E2E 双用户实时消息 |
 | 26 | 在线人数 / 列表实时 | ✅ | `chat.test.js`；E2E 在线 2 人；右侧栏 `chat:online` |
 | 27 | 用户主页与分页 | ✅ | `users-stats.test.js`；E2E 个人主页 |
+| 27.1 | 用户可修改自己的昵称与头像 | ✅ | `users-stats.test.js` 修改资料 / 参数校验；E2E 编辑弹窗、头像上传与同步 |
 | 28 | 右侧栏热榜 / 在线 / 社区真实数据 | ✅ | `users-stats.test.js`；E2E 截图；发帖后缓存失效 |
 | 29 | Compose / Dockerfile / Nginx / `.env.example` | ✅ | `deployment.test.js`；PyYAML 解析（4 服务 / 3 数据卷） |
 | 30 | README 覆盖启动 / Docker / SMTP / ngram / 版权 | ✅ | `deployment.test.js` + README 人工检查 |
@@ -135,7 +139,7 @@
 cd 赤光社
 npm run install:all
 
-# 后端 52 用例
+# 后端 54 用例
 npm run test:server
 
 # 前端 21 用例

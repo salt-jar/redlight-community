@@ -86,6 +86,8 @@ npm run dev
 
 首次登录：输入任意合法邮箱 → 点击「获取验证码」→ **验证码会打印在后端控制台**，同时登录页在开发模式下会显示 `本地开发模式验证码：xxxxxx`。验证通过后自动注册，昵称为 `同志_<邮箱前缀前 6 位>`。
 
+登录后可以点击右上角头像菜单的「编辑资料」，或在个人主页点击「编辑资料」，修改昵称与头像（头像支持 JPG / PNG / GIF / WebP，≤5MB）。
+
 也可分别启动：
 
 ```powershell
@@ -226,7 +228,7 @@ npm run e2e
 
 脚本会自行在 3101 / 5188 端口启动后端（临时 SQLite）与 Vite，使用无头 Edge 执行：
 
-登录守卫 → 邮箱验证码登录 → 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 900px / 375px 响应式断言。
+登录守卫 → 邮箱验证码登录 → 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言。
 
 截图与结果保存在 `e2e/screenshots/`（含 `e2e-result.json`）。
 
@@ -266,6 +268,7 @@ npm run build
 | GET | `/api/search/users?q&page` | 用户搜索分页 |
 | GET | `/api/chat/history?beforeId&limit` | 群聊历史（默认最近 50 条） |
 | GET | `/api/users/:id?page&size` | 用户资料 + 帖子分页 |
+| PATCH | `/api/users/me` | 修改当前用户昵称 / 头像 |
 | GET | `/api/stats/hot-topics` | 近 500 帖话题热榜（缓存 60 秒） |
 | GET | `/api/stats/community` | 社区数据 |
 | GET | `/api/stats/online` | 在线用户 |

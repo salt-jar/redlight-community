@@ -3,6 +3,7 @@ import AppHeader from '@/components/layout/AppHeader.vue';
 import SideNav from '@/components/layout/SideNav.vue';
 import RightSidebar from '@/components/layout/RightSidebar.vue';
 import MobileTabBar from '@/components/layout/MobileTabBar.vue';
+import ProfileEditModal from '@/components/profile/ProfileEditModal.vue';
 
 withDefaults(defineProps<{ showRight?: boolean }>(), { showRight: true });
 </script>
@@ -18,5 +19,6 @@ withDefaults(defineProps<{ showRight?: boolean }>(), { showRight: true });
       <RightSidebar v-if="showRight" />
     </div>
     <MobileTabBar />
+    <ProfileEditModal />
   </div>
 </template>

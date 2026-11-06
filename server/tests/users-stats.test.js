@@ -15,6 +15,60 @@ describe('用户主页、热榜话题与社区数据', () => {
     await ctx.close();
   });
 
+  it('用户可以修改昵称与头像，并同步到 auth/me 与用户主页', async () => {
+    const auth = { Authorization: `Bearer ${alice.token}` };
+    const updated = await ctx.agent
+      .patch('/api/users/me')
+      .set(auth)
+      .send({ nickname: '  红星照耀  ', avatarUrl: '/uploads/images/avatar-1.png' });
+    expect(updated.status).toBe(200);
+    expect(updated.body.user.nickname).toBe('红星照耀');
+    expect(updated.body.user.avatarUrl).toBe('/uploads/images/avatar-1.png');
+
+    const me = await ctx.agent.get('/api/auth/me').set(auth);
+    expect(me.body.user.nickname).toBe('红星照耀');
+    expect(me.body.user.avatarUrl).toBe('/uploads/images/avatar-1.png');
+
+    const profile = await ctx.agent.get(`/api/users/${alice.user.id}`);
+    expect(profile.body.user.nickname).toBe('红星照耀');
+    expect(profile.body.user.avatarUrl).toBe('/uploads/images/avatar-1.png');
+
+    const rows = await ctx.deps.db.query('SELECT nickname, avatar_url FROM users WHERE id = ?', [alice.user.id]);
+    expect(rows[0].nickname).toBe('红星照耀');
+    expect(rows[0].avatar_url).toBe('/uploads/images/avatar-1.png');
+  });
+
+  it('修改资料支持部分更新、清空头像，并拒绝非法参数', async () => {
+    const auth = { Authorization: `Bearer ${alice.token}` };
+    const avatarOnly = await ctx.agent
+      .patch('/api/users/me')
+      .set(auth)
+      .send({ avatarUrl: '/uploads/images/avatar-2.png' });
+    expect(avatarOnly.status).toBe(200);
+    expect(avatarOnly.body.user.nickname).toBe('同志_alice');
+    expect(avatarOnly.body.user.avatarUrl).toBe('/uploads/images/avatar-2.png');
+
+    const clearAvatar = await ctx.agent.patch('/api/users/me').set(auth).send({ avatarUrl: '' });
+    expect(clearAvatar.status).toBe(200);
+    expect(clearAvatar.body.user.avatarUrl).toBe('');
+
+    const cases = [
+      {},
+      { nickname: '短' },
+      { nickname: '超'.repeat(21) },
+      { nickname: '换\n行' },
+      { avatarUrl: 'javascript:alert(1)' },
+      { avatarUrl: 'http://evil.example/a.png' },
+    ];
+    for (const payload of cases) {
+      const response = await ctx.agent.patch('/api/users/me').set(auth).send(payload);
+      expect(response.status).toBe(400);
+    }
+
+    const anonymous = await ctx.agent.patch('/api/users/me').send({ nickname: '未登录' });
+    expect(anonymous.status).toBe(401);
+  });
+
   it('用户主页返回资料与分页帖子', async () => {
     for (let index = 1; index <= 12; index += 1) {
       await ctx.createPost(alice.token, `Alice 的学习笔记 ${index}`);

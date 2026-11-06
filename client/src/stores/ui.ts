@@ -3,6 +3,7 @@ import { ref } from 'vue';
 
 export const useUiStore = defineStore('ui', () => {
   const composerOpen = ref(false);
+  const profileEditorOpen = ref(false);
 
   function openComposer() {
     composerOpen.value = true;
@@ -12,5 +13,20 @@ export const useUiStore = defineStore('ui', () => {
     composerOpen.value = false;
   }
 
-  return { composerOpen, openComposer, closeComposer };
+  function openProfileEditor() {
+    profileEditorOpen.value = true;
+  }
+
+  function closeProfileEditor() {
+    profileEditorOpen.value = false;
+  }
+
+  return {
+    composerOpen,
+    profileEditorOpen,
+    openComposer,
+    closeComposer,
+    openProfileEditor,
+    closeProfileEditor,
+  };
 });

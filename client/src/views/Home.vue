@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { message } from 'ant-design-vue';
 import { ArrowUpOutlined, EditOutlined, PictureOutlined, ReloadOutlined } from '@ant-design/icons-vue';
 import AppShell from '@/components/layout/AppShell.vue';
@@ -64,6 +64,20 @@ async function refresh() {
 function onNewPost(post: Post) {
   posts.value = [post, ...posts.value.filter((item) => item.id !== post.id)];
 }
+
+// 修改资料后，立即刷新当前信息流中自己的头像与昵称
+watch(
+  () => auth.user,
+  (next) => {
+    if (!next) return;
+    posts.value = posts.value.map((post) =>
+      post.user.id === next.id
+        ? { ...post, user: { ...post.user, nickname: next.nickname, avatarUrl: next.avatarUrl } }
+        : post,
+    );
+  },
+  { deep: true },
+);
 
 function retry() {
   void loadPage(1, true);

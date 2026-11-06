@@ -545,7 +545,44 @@ async function main() {
   await page.waitForSelector('[data-testid="profile-posts"] .post-card');
   await shot(page, 'profile');
 
-  // 12. 响应式三档
+  // 12. 修改昵称与头像
+  log('修改昵称与头像...');
+  await page.click('[data-testid="edit-profile"]');
+  await waitForTestId(page, 'profile-edit-modal');
+  const newNickname = '赤光测试员';
+  await fillTestId(page, 'profile-nickname-input', newNickname);
+  const avatarUploadResponse = page.waitForResponse(
+    (response) => response.url().includes('/api/upload/image') && response.request().method() === 'POST',
+  );
+  await page.setInputFiles('[data-testid="avatar-input"]', path.join(fixturesDir, 'cover.jpg'));
+  assert((await avatarUploadResponse).status() === 200, '头像上传应成功');
+  await waitFor(
+    async () => (await page.locator('[data-testid="avatar-preview"] img').count()) > 0,
+    '头像预览应显示',
+  );
+  await shot(page, 'profile-edit');
+  const updateProfileResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/api/users/me') && response.request().method() === 'PATCH',
+  );
+  await page.click('[data-testid="profile-save"]');
+  assert((await updateProfileResponse).status() === 200, '更新资料应成功');
+  await waitFor(async () => (await page.locator('.ant-modal-wrap:visible').count()) === 0, '编辑资料弹窗应关闭');
+  await waitForText(page.locator('[data-testid="profile-nickname"]'), newNickname);
+  await waitFor(
+    async () => {
+      const avatar = page.locator('[data-testid="profile-card"] img').first();
+      return (await avatar.count()) > 0 && (await avatar.evaluate((image) => image.complete && image.naturalWidth > 0));
+    },
+    '更新后的头像应显示',
+  );
+  await waitFor(
+    async () => (await page.locator('[data-testid="app-header"] .avatar-btn img').count()) > 0,
+    '顶栏头像应更新',
+  );
+  await waitForText(page.locator('[data-testid="profile-posts"] .post-card').first(), newNickname);
+  await shot(page, 'profile-updated');
+
+  // 13. 响应式三档
   log('检查 900px 两栏布局...');
   await page.goto(webBase, { waitUntil: 'networkidle' });
   await page.setViewportSize({ width: 900, height: 800 });

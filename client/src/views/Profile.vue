@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { CalendarOutlined, FileTextOutlined } from '@ant-design/icons-vue';
+import { CalendarOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons-vue';
 import AppShell from '@/components/layout/AppShell.vue';
 import PostCard from '@/components/post/PostCard.vue';
 import PostSkeleton from '@/components/skeleton/PostSkeleton.vue';
@@ -10,11 +10,13 @@ import UserAvatar from '@/components/common/UserAvatar.vue';
 import { apiGetProfile } from '@/api/users';
 import { apiErrorMessage } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
+import { useUiStore } from '@/stores/ui';
 import type { Post, User } from '@/types';
 import { formatDate } from '@/utils/format';
 
 const route = useRoute();
 const auth = useAuthStore();
+const ui = useUiStore();
 
 const user = ref<User | null>(null);
 const posts = ref<Post[]>([]);
@@ -60,6 +62,22 @@ watch(
   },
   { immediate: true },
 );
+
+// 在页内编辑资料后，立即同步当前主页展示
+watch(
+  () => auth.user,
+  (next) => {
+    if (next && user.value && next.id === user.value.id) {
+      user.value = { ...user.value, nickname: next.nickname, avatarUrl: next.avatarUrl };
+      posts.value = posts.value.map((post) =>
+        post.user.id === next.id
+          ? { ...post, user: { ...post.user, nickname: next.nickname, avatarUrl: next.avatarUrl } }
+          : post,
+      );
+    }
+  },
+  { deep: true },
+);
 </script>
 
 <template>
@@ -89,6 +107,16 @@ watch(
             <CalendarOutlined />
             {{ formatDate(user.createdAt || '') }} 加入赤光社
           </p>
+          <button
+            v-if="isSelf"
+            class="edit-profile-btn"
+            type="button"
+            data-testid="edit-profile"
+            @click="ui.openProfileEditor()"
+          >
+            <EditOutlined />
+            编辑资料
+          </button>
         </div>
         <div class="profile-stat">
           <strong>{{ total }}</strong>
@@ -204,6 +232,24 @@ watch(
   margin: 6px 0 0;
   color: #b3a489;
   font-size: 11px;
+}
+
+.edit-profile-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border: 1px solid #f0c9cf;
+  border-radius: 5px;
+  background: #fff8f7;
+  color: var(--rl-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.edit-profile-btn:hover {
+  background: #fff1f0;
 }
 
 .profile-stat {
