@@ -43,7 +43,9 @@ export function createSocket(httpServer, { db, config, online, logger = console 
 
     socket.on('chat:send', async (data, ack) => {
       try {
-        const type = Number(data?.type) === 2 ? 2 : 1;
+        const rawType = Number(data?.type);
+        if (rawType !== 1 && rawType !== 2) throw new Error('消息类型不正确');
+        const type = rawType;
         const content = String(data?.content ?? '').trim();
         if (!content) throw new Error('消息内容不能为空');
         if (type === 1 && Array.from(content).length > 1000) throw new Error('单条消息不能超过 1000 字');

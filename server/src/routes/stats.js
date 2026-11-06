@@ -47,7 +47,7 @@ export function createStatsRouter({ db, cache, online }) {
   router.get(
     '/community',
     asyncHandler(async (_req, res) => {
-      const today = db.driver === 'mysql' ? 'DATE(created_at) = CURDATE()' : "date(created_at) = date('now')";
+      const today = db.driver === 'mysql' ? 'DATE(created_at) = CURDATE()' : "date(created_at, 'localtime') = date('now', 'localtime')";
       const [users, todayNewUsers, todayPosts, books] = await Promise.all([
         db.query('SELECT COUNT(*) AS total FROM users'),
         db.query(`SELECT COUNT(*) AS total FROM users WHERE ${today}`),

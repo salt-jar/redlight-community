@@ -66,14 +66,21 @@ export function createAuthRouter({ db, cache, mailer, config, authGuard }) {
       const email = normalizeEmail(req.body?.email);
       const code = String(req.body?.code || '').trim();
       if (!EMAIL_RE.test(email)) throw new HttpError(400, '请输入正确的邮箱地址');
-      if (!/^\d{6}$/.test(code)) {
-        return res.status(400).json({ msg: '请输入 6 位数字验证码' });
-      }
 
       const ip = clientIp(req);
       const userAgent = clientUserAgent(req);
       const existingRows = await db.query('SELECT * FROM users WHERE email = ? LIMIT 1', [email]);
       const existing = existingRows[0] || null;
+
+      // 非法格式同样属于一次失败登录尝试，需记录 login_logs
+      if (!/^\d{6}$/.test(code)) {
+        await db.query(
+          'INSERT INTO login_logs (user_id, email, login_ip, user_agent, status) VALUES (?, ?, ?, ?, 0)',
+          [existing ? Number(existing.id) : 0, email, ip, userAgent],
+        );
+        return res.status(400).json({ msg: '请输入 6 位数字验证码' });
+      }
+
       const savedCode = await cache.get(`email:code:${email}`);
 
       if (!savedCode || savedCode !== code) {

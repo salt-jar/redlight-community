@@ -115,6 +115,10 @@ describe('Socket.IO 群聊', () => {
     const emptyError = waitForEvent(socket, 'chat:error');
     socket.emit('chat:send', { type: 1, content: '   ' });
     expect((await emptyError).msg).toContain('不能为空');
+
+    const typeError = waitForEvent(socket, 'chat:error');
+    socket.emit('chat:send', { type: 3, content: '未知类型' });
+    expect((await typeError).msg).toContain('类型');
   });
 
   it('历史消息最近 50 条、上滑 beforeId 分页且保持正序', async () => {

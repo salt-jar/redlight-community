@@ -121,5 +121,8 @@ describe('邮箱验证码登录', () => {
     const response = await ctx.agent.post('/api/auth/login').send({ email: 'x@example.com', code: '12ab' });
     expect(response.status).toBe(400);
     expect(response.body.msg).toContain('6 位');
+    const logs = await ctx.deps.db.query('SELECT status FROM login_logs WHERE email = ?', ['x@example.com']);
+    expect(logs).toHaveLength(1);
+    expect(logs[0].status).toBe(0);
   });
 });
