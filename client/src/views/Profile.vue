@@ -92,7 +92,8 @@ watch(
 </script>
 
 <template>
-  <AppShell :show-right="false">
+  <AppShell :show-right="false" full-bleed>
+    <div class="profile-page">
     <div v-if="loading" class="profile-skeleton page-card">
       <span class="avatar-skeleton"></span>
       <div class="skeleton-lines">
@@ -176,10 +177,23 @@ watch(
         </div>
       </template>
     </template>
+    </div>
   </AppShell>
 </template>
 
 <style scoped>
+.profile-page {
+  width: 100%;
+  min-height: calc(100vh - 56px);
+  padding: 20px 22px 40px;
+}
+
+@media (max-width: 767px) {
+  .profile-page {
+    padding: 12px 12px 84px;
+  }
+}
+
 .profile-skeleton {
   display: flex;
   align-items: center;

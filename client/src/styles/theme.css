@@ -132,18 +132,26 @@ p {
   max-width: var(--rl-page-secondary);
 }
 
-/* 全宽四栏页面（群聊）：导航贴最左，内容撑满，无外层 margin */
-.app-body.full-bleed.no-right {
-  grid-template-columns: 200px minmax(0, 1fr);
+/* 全宽页面（群聊 / 首页 / 图书 / 我的）：导航贴最左，内容撑满，无外层 margin */
+.app-body.full-bleed {
   gap: 0;
   width: 100%;
   max-width: none;
+  margin: 0;
   padding: 0;
   justify-content: stretch;
   align-items: stretch;
 }
 
-.app-body.full-bleed.no-right .side-nav {
+.app-body.full-bleed.no-right {
+  grid-template-columns: 200px minmax(0, 1fr);
+}
+
+.app-body.full-bleed:not(.no-right) {
+  grid-template-columns: 200px minmax(0, 1fr) 280px;
+}
+
+.app-body.full-bleed .side-nav {
   width: 200px;
   height: calc(100vh - 56px);
   min-height: calc(100vh - 56px);
@@ -154,24 +162,44 @@ p {
   background: #fff;
 }
 
-.app-body.full-bleed.no-right .app-main {
+.app-body.full-bleed .app-main {
   max-width: none;
   margin: 0;
 }
 
+.app-body.full-bleed:not(.no-right) .right-sidebar {
+  width: 280px;
+  height: calc(100vh - 56px);
+  min-height: calc(100vh - 56px);
+  align-self: stretch;
+  overflow-y: auto;
+  padding: 16px;
+  border-left: 1px solid var(--rl-border);
+  background: var(--rl-bg);
+}
+
 @media (max-width: 1199px) {
-  .app-body.full-bleed.no-right {
+  .app-body.full-bleed,
+  .app-body.full-bleed.no-right,
+  .app-body.full-bleed:not(.no-right) {
     grid-template-columns: 72px minmax(0, 1fr);
   }
 
-  .app-body.full-bleed.no-right .side-nav {
+  .app-body.full-bleed .side-nav {
     width: 72px;
     padding: 14px 4px;
+  }
+
+  .app-body.full-bleed .app-main,
+  .app-body.full-bleed.no-right .app-main {
+    max-width: none;
   }
 }
 
 @media (max-width: 767px) {
-  .app-body.full-bleed.no-right {
+  .app-body.full-bleed,
+  .app-body.full-bleed.no-right,
+  .app-body.full-bleed:not(.no-right) {
     grid-template-columns: minmax(0, 1fr);
     padding: 0;
   }

@@ -55,7 +55,8 @@ onMounted(load);
 </script>
 
 <template>
-  <AppShell :show-right="false">
+  <AppShell :show-right="false" full-bleed>
+    <div class="books-page">
     <header class="books-hero">
       <div>
         <h1 class="page-title">赤光文献馆</h1>
@@ -120,10 +121,23 @@ onMounted(load);
         <p class="shelf-count">馆藏共 {{ total }} 册</p>
       </div>
     </template>
+    </div>
   </AppShell>
 </template>
 
 <style scoped>
+.books-page {
+  width: 100%;
+  min-height: calc(100vh - 56px);
+  padding: 20px 22px 40px;
+}
+
+@media (max-width: 767px) {
+  .books-page {
+    padding: 12px 12px 84px;
+  }
+}
+
 .books-hero {
   display: flex;
   align-items: flex-end;

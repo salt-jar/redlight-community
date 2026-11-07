@@ -315,12 +315,30 @@ async function main() {
   const layout = await measureLayout(page);
   assert(layout.header.height === 56, `顶栏高度应为 56px，实际 ${layout.header.height}`);
   assert(Math.abs(layout.side.width - 200) < 2, `左侧导航应为 200px，实际 ${layout.side.width}`);
-  assert(Math.abs(layout.main.width - 680) < 2, `主内容应为 680px，实际 ${layout.main.width}`);
+  assert(Math.abs(layout.main.width - 800) < 2, `主内容应撑满剩余宽度 800px，实际 ${layout.main.width}`);
   assert(Math.abs(layout.right.width - 280) < 2, `右边栏应为 280px，实际 ${layout.right.width}`);
   assert(layout.headerBackground === 'rgb(200, 16, 46)', `顶栏主色应为 #C8102E，实际 ${layout.headerBackground}`);
   assert(layout.background === 'rgb(250, 248, 245)', `页面背景应为 #FAF8F5，实际 ${layout.background}`);
   assert(layout.cardRadius === '8px', `卡片圆角应为 8px，实际 ${layout.cardRadius}`);
   assert(layout.overflow <= 1, `宽屏不应横向溢出，溢出 ${layout.overflow}px`);
+  const homeColumns = await page.evaluate(() => {
+    const box = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const rect = element.getBoundingClientRect();
+      return { left: rect.left, right: rect.right, width: rect.width };
+    };
+    return {
+      nav: box('.side-nav'),
+      main: box('.app-main'),
+      right: box('.right-sidebar'),
+      viewport: window.innerWidth,
+    };
+  });
+  assert(homeColumns.nav.left <= 1, `全局导航应贴最左侧，实际 left=${homeColumns.nav.left}`);
+  assert(Math.abs(homeColumns.nav.right - homeColumns.main.left) <= 1, '全局导航与首页主内容之间不能有间隙');
+  assert(Math.abs(homeColumns.main.right - homeColumns.right.left) <= 1, '首页主内容与右边栏之间不能有间隙');
+  assert(Math.abs(homeColumns.right.right - homeColumns.viewport) <= 1, '首页右边栏应贴住页面最右侧');
   assert(
     (await page.locator('[data-testid="big-character-poster-title"]').textContent()) === '大字报',
     '首页模块应显示「大字报」',

@@ -135,7 +135,8 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <AppShell>
+  <AppShell full-bleed>
+    <div class="home-page">
     <div v-if="pullDistance > 0 || refreshing" class="pull-indicator" :style="{ height: `${refreshing ? 36 : pullDistance}px` }">
       {{ refreshing ? '正在刷新...' : pullDistance > 42 ? '松开刷新' : '下拉刷新' }}
     </div>
@@ -195,10 +196,23 @@ onBeforeUnmount(() => {
     </button>
 
     <PostComposer @posted="onNewPost" />
+    </div>
   </AppShell>
 </template>
 
 <style scoped>
+.home-page {
+  width: 100%;
+  min-height: calc(100vh - 56px);
+  padding: 16px 20px 40px;
+}
+
+@media (max-width: 767px) {
+  .home-page {
+    padding: 12px 12px 84px;
+  }
+}
+
 .pull-indicator {
   display: flex;
   align-items: center;
