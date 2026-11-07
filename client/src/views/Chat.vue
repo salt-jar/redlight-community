@@ -521,28 +521,6 @@ onBeforeUnmount(() => {
               <PlusOutlined /> 发起提案
             </button>
           </div>
-
-          <section class="proposal-list-section">
-            <div class="proposal-list-head">
-              <h4>提案列表</h4>
-              <span>{{ proposals.length }} 条</span>
-            </div>
-            <div v-if="proposals.length" class="proposal-card-grid">
-              <button
-                v-for="proposal in proposals"
-                :key="proposal.id"
-                class="proposal-card"
-                :class="{ active: selectedProposal?.id === proposal.id && !proposalFormOpen }"
-                type="button"
-                @click="selectProposal(proposal)"
-              >
-                <strong>{{ proposal.title }}</strong>
-                <span>{{ proposal.proposerInfo }}</span>
-                <span>{{ formatProposalTime(proposal.proposalTime) }}</span>
-              </button>
-            </div>
-            <p v-else class="proposal-list-empty">暂无提案，提交第一条提案后会显示在这里。</p>
-          </section>
         </aside>
 
         <aside class="chat-rail" data-testid="chat-rail">
@@ -596,21 +574,20 @@ onBeforeUnmount(() => {
 
 .chat-workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 170px;
+  grid-template-columns: minmax(0, 1fr) 240px;
   flex: 1;
   min-height: 0;
   gap: 12px;
 }
 
 .chat-workspace.proposal-open {
-  grid-template-columns: minmax(0, 1fr) 170px 390px;
+  grid-template-columns: minmax(0, 1fr) 340px 220px;
 }
 
 .chat-main-column {
   display: flex;
   min-width: 0;
   min-height: 0;
-  order: 1;
 }
 
 .chat-main-column .chat-body {
@@ -623,13 +600,12 @@ onBeforeUnmount(() => {
   min-height: 0;
   flex-direction: column;
   gap: 8px;
-  padding: 14px 10px;
+  padding: 14px 12px;
   border: 1px solid var(--rl-border);
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--rl-shadow);
   overflow-y: auto;
-  order: 2;
 }
 
 .rail-heading {
@@ -761,7 +737,6 @@ onBeforeUnmount(() => {
   flex-direction: column;
   padding: 18px;
   overflow-y: auto;
-  order: 3;
 }
 
 .proposal-panel-head {
@@ -940,83 +915,6 @@ onBeforeUnmount(() => {
 .proposal-empty > :first-child {
   color: #c9bda9;
   font-size: 28px;
-}
-
-.proposal-list-section {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--rl-border-light);
-}
-
-.proposal-list-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.proposal-list-head h4 {
-  margin: 0;
-  color: var(--rl-deep);
-  font-family: var(--rl-serif);
-  font-size: 13px;
-}
-
-.proposal-list-head span {
-  color: var(--rl-text-secondary);
-  font-size: 10px;
-}
-
-.proposal-card-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
-}
-
-.proposal-card {
-  display: flex;
-  min-height: 78px;
-  flex-direction: column;
-  gap: 4px;
-  padding: 9px;
-  border: 1px solid var(--rl-border-light);
-  border-radius: 6px;
-  background: #fffdfb;
-  color: var(--rl-text);
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.proposal-card:hover,
-.proposal-card.active {
-  border-color: #e5cda6;
-  background: #fdf8ee;
-}
-
-.proposal-card strong {
-  display: -webkit-box;
-  overflow: hidden;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.45;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-}
-
-.proposal-card span {
-  overflow: hidden;
-  color: var(--rl-text-secondary);
-  font-size: 9px;
-  line-height: 1.35;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.proposal-list-empty {
-  margin: 8px 0;
-  color: var(--rl-text-secondary);
-  font-size: 10px;
 }
 
 .chat-head {
@@ -1301,11 +1199,11 @@ onBeforeUnmount(() => {
   }
 
   .chat-workspace {
-    grid-template-columns: minmax(0, 1fr) 160px;
+    grid-template-columns: minmax(0, 1fr) 210px;
   }
 
   .chat-workspace.proposal-open {
-    grid-template-columns: minmax(0, 1fr) 150px 330px;
+    grid-template-columns: minmax(0, 1fr) 290px 180px;
   }
 }
 
