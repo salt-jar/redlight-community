@@ -9,6 +9,7 @@ import { createAuthRouter } from './routes/auth.js';
 import { createBooksRouter } from './routes/books.js';
 import { createChatRouter } from './routes/chat.js';
 import { createPostsRouter } from './routes/posts.js';
+import { createProposalsRouter } from './routes/proposals.js';
 import { createSearchRouter } from './routes/search.js';
 import { createStatsRouter } from './routes/stats.js';
 import { createUploadRouter } from './routes/upload.js';
@@ -49,7 +50,8 @@ export function createApp(deps) {
   app.use('/api/upload', createUploadRouter({ ...deps, authGuard }));
   app.use('/api/books', createBooksRouter({ ...deps, authGuard }));
   app.use('/api/search', createSearchRouter(deps));
-  app.use('/api/chat', createChatRouter(deps));
+  app.use('/api/chat', createChatRouter({ ...deps, authGuard }));
+  app.use('/api/proposals', createProposalsRouter({ ...deps, authGuard }));
   app.use('/api/users', createUsersRouter({ ...deps, authGuard, optionalAuth }));
   app.use('/api/stats', createStatsRouter(deps));
   app.use('/api/reports', createReportsRouter({ ...deps, authGuard }));

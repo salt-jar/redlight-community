@@ -85,7 +85,7 @@ describe('Socket.IO 群聊', () => {
     expect(receivedByAlice.content).toBe('同志们好！');
     expect(receivedByAlice.user.nickname).toBe('同志_alice');
     expect(receivedByBob.id).toBe(receivedByAlice.id);
-    expect(ackResult).toEqual({ ok: true, id: receivedByAlice.id });
+    expect(ackResult).toMatchObject({ ok: true, id: receivedByAlice.id });
 
     const rows = await ctx.deps.db.query('SELECT * FROM chat_messages');
     expect(rows).toHaveLength(1);
@@ -119,6 +119,41 @@ describe('Socket.IO 群聊', () => {
     const typeError = waitForEvent(socket, 'chat:error');
     socket.emit('chat:send', { type: 3, content: '未知类型' });
     expect((await typeError).msg).toContain('类型');
+  });
+
+  it('@所有人 每位成员每周最多 3 次', async () => {
+    const initial = await ctx.agent
+      .get('/api/chat/at-all')
+      .set('Authorization', `Bearer ${alice.token}`);
+    expect(initial.status).toBe(200);
+    expect(initial.body).toMatchObject({ limit: 3, used: 0, remaining: 3 });
+
+    const socket = connect(alice.token);
+    await waitForConnection(socket);
+
+    for (let index = 0; index < 3; index += 1) {
+      const ack = new Promise((resolve) => {
+        socket.emit('chat:send', { type: 1, content: `@所有人 第 ${index + 1} 次通知` }, resolve);
+      });
+      const received = waitForEvent(socket, 'chat:message');
+      const result = await ack;
+      expect(result).toMatchObject({ ok: true, atAllUsed: true, atAllRemaining: 2 - index });
+      expect((await received).content).toContain('@所有人');
+    }
+
+    const usage = await ctx.agent
+      .get('/api/chat/at-all')
+      .set('Authorization', `Bearer ${alice.token}`);
+    expect(usage.body).toMatchObject({ used: 3, remaining: 0 });
+
+    const blocked = waitForEvent(socket, 'chat:error');
+    socket.emit('chat:send', { type: 1, content: '@所有人 第四次通知' });
+    expect((await blocked).msg).toContain('每周最多');
+
+    const bobUsage = await ctx.agent
+      .get('/api/chat/at-all')
+      .set('Authorization', `Bearer ${bob.token}`);
+    expect(bobUsage.body.remaining).toBe(3);
   });
 
   it('历史消息最近 50 条、上滑 beforeId 分页且保持正序', async () => {

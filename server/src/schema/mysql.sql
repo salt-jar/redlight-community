@@ -99,6 +99,28 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     INDEX idx_created_at (created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊消息';
 
+-- 提案（群聊右侧功能栏）
+CREATE TABLE IF NOT EXISTS proposals (
+    id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+    user_id       BIGINT       NOT NULL,
+    title         VARCHAR(120) NOT NULL,
+    proposal_time VARCHAR(64)  NOT NULL,
+    proposer_info VARCHAR(255) NOT NULL,
+    content       TEXT         NOT NULL,
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_proposals_created (created_at DESC),
+    INDEX idx_proposals_user (user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提案';
+
+-- 群聊 @所有人 每周使用记录
+CREATE TABLE IF NOT EXISTS chat_at_all_usage (
+    id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+    user_id       BIGINT       NOT NULL,
+    week_key      VARCHAR(10)  NOT NULL,
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_at_all_user_week (user_id, week_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊 @所有人 使用记录';
+
 -- 组织（如 001）
 CREATE TABLE IF NOT EXISTS organizations (
     code          VARCHAR(16)  PRIMARY KEY COMMENT '组织编号，如 001',

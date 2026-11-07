@@ -70,6 +70,16 @@ export interface ChatMessage {
   user: PostAuthor;
 }
 
+export interface Proposal {
+  id: number;
+  title: string;
+  proposalTime: string;
+  proposerInfo: string;
+  content: string;
+  createdAt: string;
+  user: PostAuthor;
+}
+
 export interface OnlineSnapshot {
   count: number;
   users: PostAuthor[];

@@ -1,6 +1,7 @@
 import { Server } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { serializeChatMessage, serializePublicUser } from './utils/serialize.js';
+import { AT_ALL_LIMIT, AT_ALL_TOKEN, consumeAtAll, getAtAllUsed, getWeekKey } from './utils/atAll.js';
 
 /**
  * 创建 Socket.IO 服务：握手 JWT 鉴权、消息落库后广播、在线用户统计。
@@ -59,6 +60,18 @@ export function createSocket(httpServer, { db, config, online, logger = console 
         if (type === 2 && !/^\/uploads\/images\/[\w.\-]+$/.test(content)) {
           throw new Error('图片地址不合法，请先上传图片');
         }
+        let atAllUsed = false;
+        let atAllRemaining = null;
+        if (type === 1 && content.includes(AT_ALL_TOKEN)) {
+          const weekKey = getWeekKey();
+          const used = await getAtAllUsed(db, user.id, weekKey);
+          if (used >= AT_ALL_LIMIT) {
+            throw new Error(`本周 @所有人 次数已用完（每周最多 ${AT_ALL_LIMIT} 次）`);
+          }
+          await consumeAtAll(db, user.id, weekKey);
+          atAllUsed = true;
+          atAllRemaining = AT_ALL_LIMIT - used - 1;
+        }
         const result = await db.query('INSERT INTO chat_messages (user_id, type, content) VALUES (?, ?, ?)', [
           Number(user.id),
           type,
@@ -71,7 +84,7 @@ export function createSocket(httpServer, { db, config, online, logger = console 
         );
         const message = serializeChatMessage(rows[0]);
         io.emit('chat:message', message);
-        if (typeof ack === 'function') ack({ ok: true, id: message.id });
+        if (typeof ack === 'function') ack({ ok: true, id: message.id, atAllUsed, atAllRemaining });
       } catch (error) {
         logger.warn(`[socket] 消息发送失败：${error.message}`);
         socket.emit('chat:error', { msg: error.message || '消息发送失败' });

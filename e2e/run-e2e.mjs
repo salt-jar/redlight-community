@@ -321,6 +321,10 @@ async function main() {
   assert(layout.background === 'rgb(250, 248, 245)', `页面背景应为 #FAF8F5，实际 ${layout.background}`);
   assert(layout.cardRadius === '8px', `卡片圆角应为 8px，实际 ${layout.cardRadius}`);
   assert(layout.overflow <= 1, `宽屏不应横向溢出，溢出 ${layout.overflow}px`);
+  assert(
+    (await page.locator('[data-testid="big-character-poster-title"]').textContent()) === '大字报',
+    '首页模块应显示「大字报」',
+  );
 
   // 4. 发布帖子
   log('发布带话题与 @ 的动态...');
@@ -541,6 +545,35 @@ async function main() {
   await waitForText(page.locator('[data-testid="chat-messages"]'), '同志们好，这是 E2E 自动化测试消息。');
   await shot(page, 'chat');
 
+  log('检查 @所有人 额度与提案面板...');
+  await waitForText(page.locator('[data-testid="chat-at-all"]'), '/3');
+  await page.click('[data-testid="chat-at-all"]');
+  assert((await page.inputValue('[data-testid="chat-input"]')).includes('@所有人'), '@所有人按钮应插入提及');
+  await page.click('[data-testid="chat-send"]');
+  await waitForText(page.locator('[data-testid="chat-messages"]'), '@所有人');
+  await waitForText(page.locator('[data-testid="chat-at-all"]'), '2/3');
+  const baseChatWidth = await page.locator('.chat-main-column').evaluate((element) => element.getBoundingClientRect().width);
+  await page.click('[data-testid="proposal-option"]');
+  await waitForTestId(page, 'proposal-panel');
+  await waitForTestId(page, 'proposal-title');
+  const openChatWidth = await page.locator('.chat-main-column').evaluate((element) => element.getBoundingClientRect().width);
+  assert(openChatWidth < baseChatWidth, `打开提案面板后主聊天区应变窄：${baseChatWidth} -> ${openChatWidth}`);
+  assert(await page.locator('[data-testid="chat-rail"]').isVisible(), '右侧功能栏应保持可见');
+
+  const proposalTitle = '关于每周学习安排的 E2E 提案';
+  await fillTestId(page, 'proposal-title', proposalTitle);
+  await fillTestId(page, 'proposal-time', '2026-11-10T19:30');
+  await fillTestId(page, 'proposal-proposer', 'E2E 测试发起人 · 社区号 123456');
+  await fillTestId(page, 'proposal-content', '建议每周固定时间开展理论学习，并提前一天发布阅读材料，方便同志们准备。');
+  const proposalResponse = page.waitForResponse(
+    (response) => response.url().endsWith('/api/proposals') && response.request().method() === 'POST',
+  );
+  await page.click('[data-testid="proposal-submit"]');
+  const proposalResult = await proposalResponse;
+  assert(proposalResult.status() === 201, `创建提案应成功，实际 ${proposalResult.status()}`);
+  await waitForText(page.locator('[data-testid="proposal-mini-list"]'), proposalTitle);
+  await waitForText(page.locator('[data-testid="proposal-panel"]'), proposalTitle);
+
   const secondLogin = await apiLogin(`e2e-peer${Date.now()}@example.com`);
   const context2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'zh-CN' });
   await context2.addInitScript(
@@ -758,6 +791,15 @@ async function main() {
   assert(reportPadding.top >= 20 && reportPadding.left >= 20, `举报弹窗内边距不足：${JSON.stringify(reportPadding)}`);
   await shot(page, 'report-dialog');
   await page.locator('.ant-modal-close').click();
+
+  log('检查群聊提案栏最终展示...');
+  await page.goto(`${webBase}/chat`, { waitUntil: 'networkidle' });
+  await waitForTestId(page, 'chat-input');
+  await page.click('[data-testid="proposal-option"]');
+  await waitForTestId(page, 'proposal-panel');
+  await waitForText(page.locator('[data-testid="proposal-mini-list"]'), '关于每周学习安排的 E2E 提案');
+  await sleep(300);
+  await shot(page, 'proposals');
 
   assert(pageErrors.length === 0, `页面存在未捕获异常：${pageErrors.join(' | ')}`);
   const relevantConsoleErrors = consoleErrors.filter(

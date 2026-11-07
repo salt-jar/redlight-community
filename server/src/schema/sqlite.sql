@@ -88,6 +88,28 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at DESC);
 
+-- 提案（群聊右侧功能栏）
+CREATE TABLE IF NOT EXISTS proposals (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL,
+    title         TEXT    NOT NULL,
+    proposal_time TEXT    NOT NULL,
+    proposer_info TEXT    NOT NULL,
+    content       TEXT    NOT NULL,
+    created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_proposals_created ON proposals(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_proposals_user ON proposals(user_id);
+
+-- 群聊 @所有人 每周使用记录
+CREATE TABLE IF NOT EXISTS chat_at_all_usage (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL,
+    week_key      TEXT    NOT NULL,
+    created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_at_all_user_week ON chat_at_all_usage(user_id, week_key);
+
 -- 组织（如 001）
 CREATE TABLE IF NOT EXISTS organizations (
     code          TEXT    PRIMARY KEY,

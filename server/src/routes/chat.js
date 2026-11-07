@@ -1,9 +1,25 @@
 import express from 'express';
 import { asyncHandler } from '../utils/http.js';
 import { serializeChatMessage } from '../utils/serialize.js';
+import { AT_ALL_LIMIT, getAtAllUsed, getWeekKey } from '../utils/atAll.js';
 
-export function createChatRouter({ db }) {
+export function createChatRouter({ db, authGuard }) {
   const router = express.Router();
+
+  router.get(
+    '/at-all',
+    authGuard,
+    asyncHandler(async (req, res) => {
+      const weekKey = getWeekKey();
+      const used = await getAtAllUsed(db, req.userId, weekKey);
+      res.json({
+        limit: AT_ALL_LIMIT,
+        used,
+        remaining: Math.max(0, AT_ALL_LIMIT - used),
+        weekStart: weekKey,
+      });
+    }),
+  );
 
   router.get(
     '/history',

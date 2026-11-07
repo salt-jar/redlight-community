@@ -12,3 +12,15 @@ export async function apiOnline(): Promise<OnlineSnapshot> {
   const { data } = await http.get<OnlineSnapshot>('/api/stats/online');
   return data;
 }
+
+export interface AtAllUsage {
+  limit: number;
+  used: number;
+  remaining: number;
+  weekStart: string;
+}
+
+export async function apiChatAtAll(): Promise<AtAllUsage> {
+  const { data } = await http.get<AtAllUsage>('/api/chat/at-all');
+  return data;
+}

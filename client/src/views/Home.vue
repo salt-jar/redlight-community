@@ -152,7 +152,10 @@ onBeforeUnmount(() => {
     </section>
 
     <div class="feed-head">
-      <h2 class="section-title">同志动态</h2>
+      <div class="feed-heading">
+        <h2 class="section-title" data-testid="big-character-poster-title">大字报</h2>
+        <span class="feed-caption">全部同志 · 按时间顺序</span>
+      </div>
       <button class="refresh-btn" type="button" :disabled="loading" @click="refresh">
         <ReloadOutlined :spin="refreshing" />
         刷新
@@ -243,6 +246,18 @@ onBeforeUnmount(() => {
   align-items: center;
   justify-content: space-between;
   margin: 16px 2px 10px;
+}
+
+.feed-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.feed-caption {
+  color: var(--rl-text-secondary);
+  font-size: 10px;
+  letter-spacing: 0.5px;
 }
 
 .refresh-btn {
