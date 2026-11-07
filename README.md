@@ -1,8 +1,17 @@
 # 赤光社 RedLight
 
-> 一个面向马列主义爱好者的内容社区：邮箱验证码登录、类微博信息流、红色文献图书馆（ZIP 上传 / 解压 / 在线阅读）、全局搜索、实时群聊。
+> 一个面向马列主义爱好者的内容社区：邮箱验证码登录、类微博信息流、红色文献图书馆（ZIP 上传 / 解压 / 在线阅读）、全局搜索、实时群聊，以及组织 001 管理后台和 SQL 开发者管理系统。
 
-项目按 《马列主义爱好者社区-技术方案》实现，并完成了 `spec.md` / `tasks.md` / `checklist.md` 中约定的全部功能与自动化测试。
+项目按 《马列主义爱好者社区-技术方案》实现，并完成了 `spec.md` / `tasks.md` / `checklist.md` 中约定的全部功能与自动化测试；后续已加入注册 / 登录拆分、用户名 ID / 社区号、组织后台、举报治理、用户封锁和统一二级页面布局。
+
+## 最近更新（main）
+
+- 登录与注册分离：注册自定义用户名 ID，自动生成 6 位社区号；
+- 组织 001 后台：SQL 系统设置密码 + 组织管理员个人密码两级验证；
+- `/sql` SQL 开发者管理系统：密码 `1111`，可管理组织、组织管理员和系统设置；
+- 举报文章 / 图书；后台可下架 / 恢复、封锁 / 解除用户；
+- 用户封锁后：登录与写接口拒绝，文章 / 图书 / 主页 / 搜索 / 群聊历史隐藏，已登录前端自动退出；
+- 二级页面统一 1080px 内容宽度、26px 卡片内边距；标准弹窗统一 22/26px 内边距，修复内容贴边。
 
 ---
 
@@ -13,7 +22,7 @@
 | 前端 | Vue 3 + Vite 7 + TypeScript + Pinia + Vue Router 4 + Ant Design Vue 4 + Axios |
 | 阅读器 | PDF.js（PDF）+ epub.js（EPUB） |
 | 实时通信 | Socket.IO 4（JWT 握手鉴权） |
-| 后端 | Node.js + Express 4 + Socket.IO + Multer + adm-zip + Nodemailer + jsonwebtoken |
+| 后端 | Node.js + Express 4 + Socket.IO + Multer + adm-zip + Nodemailer + jsonwebtoken + scrypt |
 | 数据 | MySQL 8.0（部署目标）/ SQLite（本地零依赖）、Redis（可选，验证码与限流） |
 | 部署 | Docker Compose + Nginx |
 
@@ -28,23 +37,27 @@
 ├── client/                    # 前端
 │   ├── src/
 │   │   ├── api/               # Axios 接口封装
-│   │   ├── components/        # 布局 / 帖子 / 图书 / 群聊 / 通用组件
+│   │   ├── components/        # 布局 / 帖子 / 图书 / 群聊 / 举报弹窗 / 通用组件
 │   │   ├── router/            # 路由与登录守卫
 │   │   ├── stores/            # Pinia（auth / ui）
-│   │   ├── styles/theme.css   # 红色设计 tokens 与全局样式
+│   │   ├── styles/theme.css   # 设计 tokens、二级页面与弹窗布局规范
 │   │   ├── utils/             # 时间、数字、富文本、防抖
-│   │   └── views/             # Login / Home / Books / Reader / Chat / ...
+│   │   └── views/             # Login / Home / Books / Reader / Chat / AdminPortal / ...
 │   ├── public/pdfjs/          # PDF.js cMap 与标准字体（中文 PDF 必需）
 │   ├── Dockerfile
 │   └── package.json
 ├── server/
 │   ├── src/
-│   │   ├── routes/            # auth / posts / books / upload / search / chat / users / stats
+│   │   ├── routes/            # auth / posts / books / search / chat / users / stats / reports / admin
 │   │   ├── services/          # mailer / archive / cover / storage
-│   │   ├── middleware/        # JWT、统一错误处理
-│   │   ├── schema/            # mysql.sql / sqlite.sql
+│   │   ├── middleware/        # JWT、管理员 JWT、统一错误处理
+│   │   ├── schema/            # mysql.sql / sqlite.sql + migrations/
+│   │   ├── utils/             # identity / password / serialize
 │   │   ├── app.js / db.js / cache.js / socket.js
 │   │   └── index.js
+│   ├── scripts/
+│   │   ├── show-logins.mjs    # 登录数据库查看工具
+│   │   └── create-org-admin.mjs # 创建 / 重置组织管理员
 │   ├── tests/                 # Vitest + Supertest + socket.io-client 集成测试
 │   ├── Dockerfile
 │   └── package.json
@@ -53,9 +66,8 @@
 │   ├── fixtures/              # 测试用 PDF / EPUB / 封面
 │   └── screenshots/           # 最近一次 E2E 截图（含 e2e-result.json）
 ├── scripts/
-│   ├── dev.mjs                # 一键启动前后端
+│   ├── dev.mjs                # 一键启动前后端（后端 --watch）
 │   └── generate-fixtures.py   # 生成测试用 PDF / EPUB
-├── server/scripts/show-logins.mjs  # 登录数据库查看工具
 ├── docker-compose.yml
 ├── nginx.conf
 ├── .env.example
@@ -79,6 +91,8 @@ Copy-Item .env.example .env   # Windows PowerShell；也可不复制，使用默
 npm run dev
 ```
 
+`npm run dev` 会同时启动后端（带 `--watch`，代码变更自动重载）和前端 Vite。
+
 启动后：
 
 - 前端：<http://127.0.0.1:5173>
@@ -101,16 +115,24 @@ npm run dev
 
 组织后台需要两级验证：
 
-1. **组织系统密码**：001 组织第一级密码，保存在数据库 `system_settings` 表，默认 `SQL`；
+1. **组织系统密码**：001 组织第一级密码，保存在数据库 `system_settings` 表；初始化值为 `SQL`，实际值以数据库当前值为准；
 2. **组织管理员个人密码**：管理员账号 + scrypt 哈希密码。
 
-修改 001 系统密码（可直接用 SQL）：
+查看 / 修改 001 系统密码（可直接用 SQL）：
 
 ```sql
+-- 查看当前值
+SELECT setting_key, value
+FROM system_settings
+WHERE setting_key = 'org.001.gate_password';
+
+-- 修改
 UPDATE system_settings
 SET value = '新的组织系统密码'
 WHERE setting_key = 'org.001.gate_password';
 ```
+
+修改后立即生效，不需要重启后端。SQL 开发者系统的「系统设置」页面也可以修改。
 
 创建 / 重置组织管理员：
 
@@ -266,7 +288,9 @@ docker compose up -d --build
 npm run test:server
 ```
 
-覆盖：健康检查、双 schema 字段一致性、验证码 6 位 / 5 分钟 / 60 秒限流、登录日志（成功 / 失败 / IP / UA）、注册 / 登录分离、自定义用户名 ID 与社区号、7 天 JWT、401、发帖 1000 字 / 9 图限制、信息流倒序分页、点赞幂等、评论计数、转发引用、ZIP 安全解压（路径穿越 / 可执行文件 / 无 PDF / 体积限制 / 清理）、封面提取（PDF 渲染 + EPUB 内置封面）、下载计数、搜索分页 / 分类 / 中文、群聊鉴权 / 广播 / 在线统计 / 历史上翻、用户主页、热榜缓存、社区统计、组织两级密码、SQL 开发者高权限系统、举报处理、文章 / 图书 / 用户状态管理。
+覆盖：健康检查、双 schema 字段一致性、验证码 6 位 / 5 分钟 / 60 秒限流、登录日志（成功 / 失败 / IP / UA）、注册 / 登录分离、自定义用户名 ID 与社区号、7 天 JWT、401、发帖 1000 字 / 9 图限制、信息流倒序分页、点赞幂等、评论计数、转发引用、ZIP 安全解压（路径穿越 / 可执行文件 / 无 PDF / 体积限制 / 清理）、封面提取（PDF 渲染 + EPUB 内置封面）、下载计数、搜索分页 / 分类 / 中文、群聊鉴权 / 广播 / 在线统计 / 历史上翻、用户主页、热榜缓存、社区统计、组织两级密码、SQL 开发者高权限系统、举报处理、文章 / 图书 / 用户状态管理、封锁后内容隐藏与解除恢复。
+
+当前结果：**9 个测试文件 / 65 个用例全部通过**。
 
 ### 2. 前端单元测试（Vitest + Vue Test Utils + happy-dom）
 
@@ -276,6 +300,8 @@ npm run test:client
 
 覆盖：数字 / 时间格式化（含「万」）、XSS 转义与话题高亮、300ms 防抖、auth store、PostCard 点赞 / 评论展开 / 转发引用、GlobalSearch 防抖与回车跳转。
 
+当前结果：**6 个测试文件 / 21 个用例全部通过**。
+
 ### 3. 端到端测试（Playwright Core + 本机 Microsoft Edge）
 
 ```powershell
@@ -284,7 +310,9 @@ npm run e2e
 
 脚本会自行在 3101 / 5188 端口启动后端（临时 SQLite）与 Vite，使用无头 Edge 执行：
 
-登录守卫 → 邮箱验证码注册（自定义 ID / 社区号）→ 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言 → 提交举报 → 组织后台两级验证 → 查看举报并下架文章 → SQL 开发者系统（1111）高权限页面。
+登录守卫 → 邮箱验证码注册（自定义 ID / 社区号）→ 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言 → 二级页面宽度 / 卡片内边距断言 → 提交举报 → 组织后台两级验证 → 查看举报并下架文章 → 后台封锁 / 解除封锁用户 → SQL 开发者系统（1111）高权限页面 → 举报弹窗内边距检查。
+
+当前结果：**19 张截图，0 页面异常，0 控制台错误**。
 
 截图与结果保存在 `e2e/screenshots/`（含 `e2e-result.json`）。
 
@@ -397,9 +425,15 @@ Socket.IO：连接时 `auth.token` 携带 JWT；发送 `chat:send` `{ type: 1|2,
 
 ## 十一、版本发布
 
-当前版本：**v1.0.0**。
+**v1.0.0** 是已创建的 GitHub Release；当前 `main` 分支已在其基础上加入：
 
-- 完整发布说明（功能清单、环境依赖、本地运行全部功能的命令、Docker、测试、环境变量）：[RELEASE_NOTES.md](RELEASE_NOTES.md)
+- 注册 / 登录拆分、用户名 ID 与社区号；
+- 组织 001 管理后台与 SQL 开发者管理系统；
+- 举报处理、文章 / 图书下架、用户封锁；
+- 二级页面宽度、卡片 / 弹窗内边距统一。
+
+> 最新功能目前位于 `main`，尚未单独创建新的 Release tag。完整发布说明、环境依赖和本地运行全部功能的命令见 [RELEASE_NOTES.md](RELEASE_NOTES.md)。
+
 - 验收结果：[TEST-REPORT.md](TEST-REPORT.md)
 - 登录数据库使用：[DATABASE.md](DATABASE.md)
 
