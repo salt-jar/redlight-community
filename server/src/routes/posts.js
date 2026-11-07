@@ -32,7 +32,7 @@ async function attachMeta(db, rows, viewerId) {
   const repostIds = [...new Set(rows.map((row) => Number(row.repost_id)).filter((id) => Number.isSafeInteger(id) && id > 0))];
   if (repostIds.length) {
     const originals = await db.query(
-      `${POST_SELECT} WHERE p.id IN (${placeholders(repostIds.length)}) AND p.status = 1`,
+      `${POST_SELECT} WHERE p.id IN (${placeholders(repostIds.length)}) AND p.status = 1 AND u.status = 1`,
       repostIds,
     );
     for (const original of originals) reposts.set(Number(original.id), original);
@@ -40,7 +40,7 @@ async function attachMeta(db, rows, viewerId) {
   return { likedIds, reposts };
 }
 
-const ACTIVE_POSTS = `p.status = 1 AND (p.repost_id IS NULL OR EXISTS (
+const ACTIVE_POSTS = `p.status = 1 AND u.status = 1 AND (p.repost_id IS NULL OR EXISTS (
   SELECT 1 FROM posts original WHERE original.id = p.repost_id AND original.status = 1
 ))`;
 
@@ -50,7 +50,10 @@ async function listPosts(db, { where = '', params = [], page, size, offset, view
     `${POST_SELECT} ${activeWhere} ORDER BY p.id DESC LIMIT ? OFFSET ?`,
     [...params, Number(size), Number(offset)],
   );
-  const countRows = await db.query(`SELECT COUNT(*) AS total FROM posts p ${activeWhere}`, params);
+  const countRows = await db.query(
+    `SELECT COUNT(*) AS total FROM posts p JOIN users u ON u.id = p.user_id ${activeWhere}`,
+    params,
+  );
   const total = Number(countRows[0]?.total || 0);
   const { likedIds, reposts } = await attachMeta(db, rows, viewerId);
   return {
@@ -63,7 +66,7 @@ async function listPosts(db, { where = '', params = [], page, size, offset, view
 }
 
 async function getPostRow(db, id) {
-  const rows = await db.query(`${POST_SELECT} WHERE p.id = ? AND p.status = 1 LIMIT 1`, [id]);
+  const rows = await db.query(`${POST_SELECT} WHERE p.id = ? AND p.status = 1 AND u.status = 1 LIMIT 1`, [id]);
   return rows[0] || null;
 }
 
@@ -127,7 +130,7 @@ export function createPostsRouter({ db, config, cache, authGuard, optionalAuth }
     authGuard,
     asyncHandler(async (req, res) => {
       const id = parseId(req.params.id);
-      const rows = await db.query('SELECT id FROM posts WHERE id = ? AND status = 1 LIMIT 1', [id]);
+      const rows = await db.query('SELECT p.id FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1 LIMIT 1', [id]);
       if (!rows.length) throw new HttpError(404, '帖子不存在或已删除');
 
       const existing = await db.query('SELECT id FROM likes WHERE user_id = ? AND post_id = ? LIMIT 1', [req.userId, id]);
@@ -151,12 +154,12 @@ export function createPostsRouter({ db, config, cache, authGuard, optionalAuth }
 
   async function listComments(req, res) {
     const id = parseId(req.params.id);
-    const posts = await db.query('SELECT id FROM posts WHERE id = ? AND status = 1 LIMIT 1', [id]);
+    const posts = await db.query('SELECT p.id FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1 LIMIT 1', [id]);
     if (!posts.length) throw new HttpError(404, '帖子不存在或已删除');
     const rows = await db.query(
       `SELECT c.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url
        FROM comments c JOIN users u ON u.id = c.user_id
-       WHERE c.post_id = ? ORDER BY c.id ASC LIMIT 500`,
+       WHERE c.post_id = ? AND u.status = 1 ORDER BY c.id ASC LIMIT 500`,
       [id],
     );
     res.json({ list: rows.map(serializeComment), total: rows.length });
@@ -171,7 +174,7 @@ export function createPostsRouter({ db, config, cache, authGuard, optionalAuth }
     if (length === 0) throw new HttpError(400, '评论内容不能为空');
     if (length > config.maxCommentContent) throw new HttpError(400, `评论不能超过 ${config.maxCommentContent} 字`);
 
-    const posts = await db.query('SELECT id FROM posts WHERE id = ? AND status = 1 LIMIT 1', [id]);
+    const posts = await db.query('SELECT p.id FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = ? AND p.status = 1 AND u.status = 1 LIMIT 1', [id]);
     if (!posts.length) throw new HttpError(404, '帖子不存在或已删除');
 
     const result = await db.query('INSERT INTO comments (post_id, user_id, content) VALUES (?, ?, ?)', [id, req.userId, content]);

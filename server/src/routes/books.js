@@ -54,7 +54,10 @@ export function createBooksRouter({ db, config, authGuard }) {
     asyncHandler(async (req, res) => {
       const { page, size, offset } = parsePagination(req.query, 12, 50);
       const category = String(req.query.category || '').trim();
-      const where = ['b.status = 1'];
+      const where = [
+        'b.status = 1',
+        'EXISTS (SELECT 1 FROM users bu WHERE bu.id = b.uploader_id AND bu.status = 1)',
+      ];
       const params = [];
       if (category && category !== '全部') {
         where.push('b.category = ?');
@@ -131,7 +134,10 @@ export function createBooksRouter({ db, config, authGuard }) {
     '/:id',
     asyncHandler(async (req, res) => {
       const id = parseId(req.params.id);
-      const rows = await db.query(`${BOOK_SELECT} WHERE b.id = ? AND b.status = 1 LIMIT 1`, [id]);
+      const rows = await db.query(
+        `${BOOK_SELECT} WHERE b.id = ? AND b.status = 1 AND EXISTS (SELECT 1 FROM users bu WHERE bu.id = b.uploader_id AND bu.status = 1) LIMIT 1`,
+        [id],
+      );
       if (!rows.length) throw new HttpError(404, '图书不存在或尚未上架');
       res.json({ book: serializeBook(rows[0]) });
     }),
@@ -141,7 +147,10 @@ export function createBooksRouter({ db, config, authGuard }) {
     '/:id/file',
     asyncHandler(async (req, res) => {
       const id = parseId(req.params.id);
-      const rows = await db.query('SELECT * FROM books WHERE id = ? AND status = 1 LIMIT 1', [id]);
+      const rows = await db.query(
+        'SELECT * FROM books WHERE id = ? AND status = 1 AND EXISTS (SELECT 1 FROM users bu WHERE bu.id = books.uploader_id AND bu.status = 1) LIMIT 1',
+        [id],
+      );
       if (!rows.length) throw new HttpError(404, '图书不存在或尚未上架');
       const book = rows[0];
       const absolute = resolveBookFile(config, book);
@@ -156,7 +165,10 @@ export function createBooksRouter({ db, config, authGuard }) {
     '/:id/download',
     asyncHandler(async (req, res) => {
       const id = parseId(req.params.id);
-      const rows = await db.query('SELECT * FROM books WHERE id = ? AND status = 1 LIMIT 1', [id]);
+      const rows = await db.query(
+        'SELECT * FROM books WHERE id = ? AND status = 1 AND EXISTS (SELECT 1 FROM users bu WHERE bu.id = books.uploader_id AND bu.status = 1) LIMIT 1',
+        [id],
+      );
       if (!rows.length) throw new HttpError(404, '图书不存在或尚未上架');
       const book = rows[0];
       const absolute = resolveBookFile(config, book);

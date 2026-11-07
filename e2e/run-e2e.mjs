@@ -704,6 +704,33 @@ async function main() {
   await sleep(300);
   await shot(page, 'admin-report-handled');
 
+  log('检查后台封锁 / 解除封锁用户...');
+  await page.getByRole('tab', { name: /用户管理/ }).click();
+  await waitForText(page.locator('[data-testid="admin-dashboard"]'), secondLogin.user.nickname);
+  const peerRow = page.locator('.manage-row').filter({ hasText: secondLogin.user.nickname }).first();
+  await peerRow.locator('button').last().click();
+  await page.waitForSelector('.ant-modal-confirm', { state: 'visible' });
+  const blockResponse = page.waitForResponse(
+    (response) => response.url().includes('/api/admin/users/') && response.request().method() === 'POST',
+  );
+  await page.locator('.ant-modal-confirm-btns button').last().click();
+  assert((await blockResponse).status() === 200, '后台封锁用户应成功');
+  await waitForText(
+    page.locator('.manage-row').filter({ hasText: secondLogin.user.nickname }).first(),
+    '已封锁',
+  );
+  await page.locator('.manage-row').filter({ hasText: secondLogin.user.nickname }).first().locator('button').last().click();
+  await page.waitForSelector('.ant-modal-confirm', { state: 'visible' });
+  const unblockResponse = page.waitForResponse(
+    (response) => response.url().includes('/api/admin/users/') && response.request().method() === 'POST',
+  );
+  await page.locator('.ant-modal-confirm-btns button').last().click();
+  assert((await unblockResponse).status() === 200, '后台解除封锁应成功');
+  await waitForText(
+    page.locator('.manage-row').filter({ hasText: secondLogin.user.nickname }).first(),
+    '正常',
+  );
+
   log('检查 SQL 开发者管理系统（密码 1111）...');
   await page.goto(`${webBase}/sql`, { waitUntil: 'networkidle' });
   await waitForTestId(page, 'admin-gate-password');

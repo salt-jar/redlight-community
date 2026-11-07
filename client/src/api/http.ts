@@ -32,7 +32,17 @@ http.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
     const url = String(error?.config?.url || '');
-    if (status === 401 && !url.includes('/api/auth/login') && !url.includes('/api/auth/send-code')) {
+    const msg = String(error?.response?.data?.msg || '');
+    if (
+      status === 401 &&
+      !url.includes('/api/auth/login') &&
+      !url.includes('/api/auth/send-code')
+    ) {
+      clearAuthStorage();
+      unauthorizedHandler?.();
+    }
+    // 账号被封锁：立即清理登录态并回到登录页，而不是继续使用旧页面
+    if (status === 403 && /封禁/.test(msg)) {
       clearAuthStorage();
       unauthorizedHandler?.();
     }

@@ -499,14 +499,14 @@ async function setBookStatus(book: AdminBook, status: number) {
 async function setUserStatus(user: AdminUser, status: number) {
   Modal.confirm({
     title: status === 1 ? '解除封锁' : '封锁用户',
-    content: status === 1 ? `确认解除对「${user.nickname}」的封锁？` : `确认封锁「${user.nickname}」？封锁后该用户将无法登录和发言。`,
+    content: status === 1 ? `确认解除对「${user.nickname}」的封锁？` : `确认封锁「${user.nickname}」？封锁后该用户将无法登录和发言，文章 / 图书 / 主页也会隐藏。`,
     okText: '确认',
     cancelText: '取消',
     okType: status === 1 ? 'default' : 'danger',
     async onOk() {
       try {
         await apiAdminSetUserStatus(user.id, status);
-        message.success(status === 1 ? '已解除封锁' : '用户已封锁');
+        message.success(status === 1 ? '已解除封锁' : '用户已封锁，内容已隐藏');
         await Promise.all([loadUsers(), loadStats(), loadReports()]);
       } catch (error) {
         if (!handleAuthError(error)) message.error(apiErrorMessage(error));

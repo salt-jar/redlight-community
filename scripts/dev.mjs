@@ -77,7 +77,7 @@ process.on('SIGINT', () => shutdown(0));
 process.on('SIGTERM', () => shutdown(0));
 
 console.log('[dev] 启动后端 ...');
-const server = start('server', process.execPath, ['src/index.js'], {
+const server = start('server', process.execPath, ['--watch', 'src/index.js'], {
   cwd: path.join(root, 'server'),
   env: { NODE_ENV: process.env.NODE_ENV || 'development' },
 });

@@ -9,7 +9,10 @@ function likeParam(q) {
 }
 
 function bookFilter(db, q, category) {
-  const where = ['status = 1'];
+  const where = [
+    'status = 1',
+    'EXISTS (SELECT 1 FROM users bu WHERE bu.id = books.uploader_id AND bu.status = 1)',
+  ];
   const params = [];
   if (q) {
     if (db.driver === 'mysql') {
@@ -44,7 +47,7 @@ export function createSearchRouter({ db }) {
       const like = likeParam(q);
       const users = await db.query(
         `SELECT id, nickname, username, community_no, avatar_url, bio, created_at FROM users
-         WHERE nickname LIKE ? OR email LIKE ? OR username LIKE ? OR community_no LIKE ?
+         WHERE status = 1 AND (nickname LIKE ? OR email LIKE ? OR username LIKE ? OR community_no LIKE ?)
          ORDER BY id DESC LIMIT 5`,
         [like, like, like, like],
       );
@@ -75,9 +78,9 @@ export function createSearchRouter({ db }) {
       const q = String(req.query.q || '').trim();
       const { page, size, offset } = parsePagination(req.query, 20, 50);
       const params = [];
-      let whereSql = '';
+      let whereSql = 'WHERE status = 1';
       if (q) {
-        whereSql = 'WHERE nickname LIKE ? OR email LIKE ? OR username LIKE ? OR community_no LIKE ?';
+        whereSql = 'WHERE status = 1 AND (nickname LIKE ? OR email LIKE ? OR username LIKE ? OR community_no LIKE ?)';
         const like = likeParam(q);
         params.push(like, like, like, like);
       }

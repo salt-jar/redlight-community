@@ -56,7 +56,7 @@ export function createUsersRouter({ db, optionalAuth, authGuard }) {
     asyncHandler(async (req, res) => {
       const id = Number(req.params.id);
       if (!Number.isSafeInteger(id) || id <= 0) throw new HttpError(404, '用户不存在');
-      const rows = await db.query('SELECT * FROM users WHERE id = ? LIMIT 1', [id]);
+      const rows = await db.query('SELECT * FROM users WHERE id = ? AND status = 1 LIMIT 1', [id]);
       if (!rows.length) throw new HttpError(404, '用户不存在');
       const { page, size, offset } = parsePagination(req.query, 10, 50);
       const { list, total } = await listPosts(db, {

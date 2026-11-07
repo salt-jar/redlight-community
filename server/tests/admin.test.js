@@ -215,9 +215,19 @@ describe('组织与 SQL 开发者管理后台', () => {
       .send({ email: 'blockme@example.com', purpose: 'login' });
     expect(blockedSendCode.status).toBe(403);
 
+    // 封锁后该用户的内容、主页与搜索结果都不再对普通用户可见
+    const feed = await ctx.agent.get('/api/posts?page=1&size=20');
+    expect(feed.body.list.some((entry) => entry.id === post.id)).toBe(false);
+    expect((await ctx.agent.get(`/api/posts/${post.id}`)).status).toBe(404);
+    expect((await ctx.agent.get(`/api/users/${author.user.id}`)).status).toBe(404);
+    const search = await ctx.agent.get('/api/search/users?q=blockme');
+    expect(search.body.list.some((entry) => entry.id === author.user.id)).toBe(false);
+
     const users = await ctx.agent.get('/api/admin/users?q=blockme').set('Authorization', `Bearer ${token}`);
     const listed = users.body.list.find((entry) => entry.id === author.user.id);
     expect(listed.status).toBe(0);
+    const adminPosts = await ctx.agent.get('/api/admin/posts?page=1&size=20').set('Authorization', `Bearer ${token}`);
+    expect(adminPosts.body.list.some((entry) => entry.id === post.id)).toBe(true);
 
     const unblock = await ctx.agent
       .post(`/api/admin/users/${author.user.id}/status`)
@@ -226,6 +236,9 @@ describe('组织与 SQL 开发者管理后台', () => {
     expect(unblock.status).toBe(200);
     const activeMe = await ctx.agent.get('/api/auth/me').set('Authorization', `Bearer ${author.token}`);
     expect(activeMe.status).toBe(200);
+    const restoredFeed = await ctx.agent.get('/api/posts?page=1&size=20');
+    expect(restoredFeed.body.list.some((entry) => entry.id === post.id)).toBe(true);
+    expect((await ctx.agent.get(`/api/users/${author.user.id}`)).status).toBe(200);
   });
 
   it('后台可管理文章、图书、用户状态并查看统计', async () => {
@@ -267,6 +280,11 @@ describe('组织与 SQL 开发者管理后台', () => {
       .send({ status: 0 });
     expect(bookOff.status).toBe(200);
     expect((await ctx.agent.get(`/api/books/${bookId}`)).status).toBe(404);
+    const bookOn = await ctx.agent
+      .post(`/api/admin/books/${bookId}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 1 });
+    expect(bookOn.status).toBe(200);
 
     const users = await ctx.agent.get('/api/admin/users?page=1&size=20').set('Authorization', `Bearer ${token}`);
     expect(users.body.list.some((entry) => entry.id === user.user.id)).toBe(true);
@@ -276,6 +294,13 @@ describe('组织与 SQL 开发者管理后台', () => {
       .send({ status: 0 });
     expect(block.status).toBe(200);
     expect((await ctx.agent.get('/api/auth/me').set('Authorization', `Bearer ${user.token}`)).status).toBe(403);
+    expect((await ctx.agent.get(`/api/books/${bookId}`)).status).toBe(404);
+    const unblock = await ctx.agent
+      .post(`/api/admin/users/${user.user.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 1 });
+    expect(unblock.status).toBe(200);
+    expect((await ctx.agent.get(`/api/books/${bookId}`)).status).toBe(200);
   });
 
   it('举报接口校验原因、目标与权限', async () => {
