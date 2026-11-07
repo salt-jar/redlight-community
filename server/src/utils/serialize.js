@@ -137,6 +137,8 @@ export function serializeChatMessage(row) {
     groupId: toNumber(row.group_id, 1),
     type: toNumber(row.type, 1),
     content: row.content || '',
+    proposalId: row.proposal_id ? toNumber(row.proposal_id) : null,
+    proposalTitle: row.proposal_title || '',
     createdAt: toIso(row.created_at),
     user: {
       id: toNumber(row.user_id),

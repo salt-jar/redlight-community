@@ -5,6 +5,7 @@ import { createMailer } from './services/mailer.js';
 import { createOnlineRegistry } from './online.js';
 import { ensureStorage } from './services/storage.js';
 import { hashPassword } from './utils/password.js';
+import { EventEmitter } from 'node:events';
 
 /**
  * 组装运行时依赖：数据库、缓存、邮件、在线登记表。
@@ -16,10 +17,11 @@ export async function createDeps(config = loadConfig()) {
   const cache = await createCache(config);
   const mailer = createMailer(config);
   const online = createOnlineRegistry();
+  const chatEvents = new EventEmitter();
   await ensureDefaultOrganization(db);
   await ensureBootstrapOrgAdmin(db, config);
   await ensureDefaultChatGroups(db);
-  return { config, db, cache, mailer, online };
+  return { config, db, cache, mailer, online, chatEvents };
 }
 
 /** 默认组织 001；一级系统密码存入 system_settings，默认 SQL，可通过 SQL 修改 */

@@ -4,10 +4,22 @@ import UserAvatar from '@/components/common/UserAvatar.vue';
 import type { ChatMessage } from '@/types';
 import { formatChatTime } from '@/utils/format';
 
-defineProps<{ message: ChatMessage; self: boolean }>();
+const props = defineProps<{ message: ChatMessage; self: boolean }>();
+
+const emit = defineEmits<{ (event: 'open-proposal', proposalId: number): void }>();
 
 const previewOpen = ref(false);
 const previewSrc = ref('');
+
+function openProposalFromMessage() {
+  if (props.message.proposalId) emit('open-proposal', props.message.proposalId);
+}
+
+function onContextMenu(event: MouseEvent) {
+  if (!props.message.proposalId) return;
+  event.preventDefault();
+  emit('open-proposal', props.message.proposalId);
+}
 
 function openPreview(src: string) {
   previewSrc.value = src;
@@ -16,14 +28,23 @@ function openPreview(src: string) {
 </script>
 
 <template>
-  <div class="chat-msg" :class="{ self }" :data-message-id="message.id">
+  <div
+    class="chat-msg"
+    :class="{ self, 'proposal-msg': message.proposalId }"
+    :data-message-id="message.id"
+    @contextmenu="onContextMenu"
+  >
     <UserAvatar v-if="!self" :user="message.user" :size="34" class="msg-avatar" />
     <div class="msg-body">
       <div class="msg-meta">
         <span class="msg-name">{{ message.user.nickname }}</span>
         <span v-if="message.user.isAdmin" class="admin-badge" data-testid="admin-badge">管理员</span>
+        <span v-if="message.proposalId" class="proposal-chat-badge">提案讨论</span>
         <span class="msg-time">{{ formatChatTime(message.createdAt) }}</span>
       </div>
+      <p v-if="message.proposalId" class="proposal-chat-title" @click="openProposalFromMessage" @contextmenu.prevent="openProposalFromMessage">
+        {{ message.proposalTitle || '提案' }} · 右键打开提案
+      </p>
       <div v-if="message.type === 2" class="msg-bubble image-bubble">
         <img :src="message.content" alt="图片消息" @click="openPreview(message.content)" />
       </div>
@@ -85,6 +106,29 @@ function openPreview(src: string) {
   font-size: 9px;
   font-weight: 600;
   line-height: 14px;
+}
+
+.proposal-chat-badge {
+  padding: 0 5px;
+  border: 1px solid #e5cda6;
+  border-radius: 3px;
+  background: #fdf8ee;
+  color: #946b2d;
+  font-size: 9px;
+  line-height: 14px;
+}
+
+.proposal-chat-title {
+  margin: 0 0 3px;
+  color: #946b2d;
+  font-size: 10px;
+  cursor: context-menu;
+}
+
+.chat-msg.proposal-msg .text-bubble {
+  border: 1px solid #ead7b5;
+  background: #fffaf0;
+  color: var(--rl-text);
 }
 
 .msg-bubble {

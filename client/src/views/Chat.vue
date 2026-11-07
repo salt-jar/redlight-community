@@ -3,8 +3,12 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import { io, type Socket } from 'socket.io-client';
 import { message } from 'ant-design-vue';
 import {
+  AppstoreOutlined,
+  ArrowLeftOutlined,
   ClockCircleOutlined,
-  FileTextOutlined,
+  CloseOutlined,
+  LikeFilled,
+  LikeOutlined,
   MessageOutlined,
   PictureOutlined,
   PlusOutlined,
@@ -14,11 +18,25 @@ import AppShell from '@/components/layout/AppShell.vue';
 import ChatMessage from '@/components/chat/ChatMessage.vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import { apiChatGroups, apiChatHistory, apiOnline } from '@/api/chat';
-import { apiCreateProposal, apiProposals } from '@/api/proposals';
+import {
+  apiCommentProposal,
+  apiCreateProposal,
+  apiProposalComments,
+  apiProposalDetail,
+  apiProposals,
+  apiVoteProposal,
+} from '@/api/proposals';
 import { apiUploadImage } from '@/api/upload';
 import { apiErrorMessage } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
-import type { ChatGroup, ChatMessage as ChatMessageType, OnlineSnapshot, PostAuthor, Proposal } from '@/types';
+import type {
+  ChatGroup,
+  ChatMessage as ChatMessageType,
+  OnlineSnapshot,
+  PostAuthor,
+  Proposal,
+  ProposalComment,
+} from '@/types';
 
 const GROUP_STORAGE_KEY = 'redlight_chat_group';
 const auth = useAuthStore();
@@ -27,7 +45,8 @@ const messages = ref<ChatMessageType[]>([]);
 const onlineUsers = ref<PostAuthor[]>([]);
 const groups = ref<ChatGroup[]>([]);
 const activeGroupId = ref(1);
-const activeFunction = ref<'proposals'>('proposals');
+const functionOpen = ref(false);
+const functionCreateOpen = ref(false);
 const draft = ref('');
 const loading = ref(true);
 const loadingEarlier = ref(false);
@@ -40,8 +59,15 @@ let socket: Socket | null = null;
 let historyRequest = 0;
 
 const proposals = ref<Proposal[]>([]);
-const selectedProposal = ref<Proposal | null>(null);
-const proposalFormOpen = ref(false);
+const proposalsLoading = ref(false);
+const activeProposal = ref<Proposal | null>(null);
+const proposalDetailLoading = ref(false);
+const proposalComments = ref<ProposalComment[]>([]);
+const proposalCommentDraft = ref('');
+const proposalCommentSending = ref(false);
+const proposalVotePending = ref(false);
+const proposalDiscussionEl = ref<HTMLElement | null>(null);
+let proposalRequest = 0;
 const proposalSubmitting = ref(false);
 const proposalError = ref('');
 const proposalForm = ref({
@@ -150,6 +176,9 @@ function connect() {
     if (!messages.value.some((item) => item.id === payload.id)) {
       messages.value.push(payload);
       if (nearBottom) void nextTick(scrollToBottom);
+      if (payload.proposalId && activeProposal.value?.id === payload.proposalId) {
+        void refreshProposalComments(payload.proposalId);
+      }
     }
   });
   socket.on('chat:online', (snapshot: OnlineSnapshot) => {
@@ -222,6 +251,10 @@ async function switchGroup(group: ChatGroup) {
   if (group.id === activeGroupId.value) return;
   activeGroupId.value = group.id;
   localStorage.setItem(GROUP_STORAGE_KEY, String(group.id));
+  activeProposal.value = null;
+  proposalComments.value = [];
+  functionOpen.value = false;
+  functionCreateOpen.value = false;
   messages.value = [];
   hasMore.value = false;
   joinCurrentGroup();
@@ -240,33 +273,27 @@ function formatCreatedAt(value: string) {
 }
 
 async function loadProposals() {
+  proposalsLoading.value = true;
   try {
     proposals.value = await apiProposals(50);
-    if (proposals.value.length) {
-      selectedProposal.value = proposals.value[0];
-      proposalFormOpen.value = false;
-    } else {
-      selectedProposal.value = null;
-      proposalFormOpen.value = true;
-      prepareProposalForm();
-    }
   } catch (err) {
     message.error(apiErrorMessage(err));
+  } finally {
+    proposalsLoading.value = false;
   }
 }
 
-function openProposalTab() {
-  activeFunction.value = 'proposals';
-  if (!selectedProposal.value && proposals.value.length) {
-    selectedProposal.value = proposals.value[0];
-    proposalFormOpen.value = false;
+function toggleFunctionPanel() {
+  functionOpen.value = !functionOpen.value;
+  if (functionOpen.value) {
+    functionCreateOpen.value = false;
+    void loadProposals();
   }
 }
 
-function selectProposal(proposal: Proposal) {
-  selectedProposal.value = proposal;
-  proposalFormOpen.value = false;
-  activeFunction.value = 'proposals';
+function closeFunctionPanel() {
+  functionOpen.value = false;
+  functionCreateOpen.value = false;
 }
 
 function prepareProposalForm() {
@@ -284,17 +311,128 @@ function prepareProposalForm() {
 }
 
 function startNewProposal() {
-  selectedProposal.value = null;
-  proposalFormOpen.value = true;
+  functionOpen.value = true;
+  functionCreateOpen.value = true;
   proposalError.value = '';
-  activeFunction.value = 'proposals';
   prepareProposalForm();
 }
 
 function cancelProposalForm() {
-  proposalFormOpen.value = false;
+  functionCreateOpen.value = false;
   proposalError.value = '';
-  if (proposals.value.length) selectedProposal.value = proposals.value[0];
+}
+
+async function scrollProposalDiscussion() {
+  await nextTick();
+  const el = proposalDiscussionEl.value;
+  if (el) el.scrollTop = el.scrollHeight;
+}
+
+async function refreshProposalComments(proposalId: number) {
+  if (activeProposal.value?.id !== proposalId) return;
+  try {
+    const comments = await apiProposalComments(proposalId);
+    if (activeProposal.value?.id === proposalId) {
+      proposalComments.value = comments;
+      await scrollProposalDiscussion();
+    }
+  } catch {
+    // 讨论区实时刷新失败不打断阅读
+  }
+}
+
+async function openProposalDetail(input: Proposal | number) {
+  const id = typeof input === 'number' ? input : input.id;
+  const requestId = ++proposalRequest;
+  if (typeof input !== 'number') activeProposal.value = input;
+  proposalDetailLoading.value = true;
+  proposalComments.value = [];
+  functionCreateOpen.value = false;
+  try {
+    const [detail, comments] = await Promise.all([apiProposalDetail(id), apiProposalComments(id)]);
+    if (requestId !== proposalRequest) return;
+    activeProposal.value = detail;
+    proposalComments.value = comments;
+    functionOpen.value = false;
+    await scrollProposalDiscussion();
+  } catch (err) {
+    if (requestId === proposalRequest) {
+      activeProposal.value = null;
+      message.error(apiErrorMessage(err));
+    }
+  } finally {
+    if (requestId === proposalRequest) proposalDetailLoading.value = false;
+  }
+}
+
+function closeProposalDetail() {
+  proposalRequest += 1;
+  activeProposal.value = null;
+  proposalComments.value = [];
+  proposalCommentDraft.value = '';
+  functionOpen.value = true;
+  void loadProposals();
+}
+
+function openProposalFromMessage(proposalId: number) {
+  void openProposalDetail(proposalId);
+}
+
+async function toggleProposalVote() {
+  if (!activeProposal.value || proposalVotePending.value) return;
+  proposalVotePending.value = true;
+  try {
+    const result = await apiVoteProposal(activeProposal.value.id);
+    activeProposal.value = {
+      ...activeProposal.value,
+      voted: result.voted,
+      voteCount: result.voteCount,
+    };
+  } catch (err) {
+    message.error(apiErrorMessage(err));
+  } finally {
+    proposalVotePending.value = false;
+  }
+}
+
+async function sendProposalComment() {
+  if (!activeProposal.value || proposalCommentSending.value) return;
+  const content = proposalCommentDraft.value.trim();
+  if (!content) return;
+  if (Array.from(content).length > 2000) {
+    message.error('提案讨论单条不能超过 2000 字');
+    return;
+  }
+  proposalCommentSending.value = true;
+  try {
+    const result = await apiCommentProposal(activeProposal.value.id, content, activeGroupId.value);
+    proposalCommentDraft.value = '';
+    if (!proposalComments.value.some((comment) => comment.id === result.comment.id)) {
+      proposalComments.value.push(result.comment);
+    }
+    activeProposal.value = {
+      ...activeProposal.value,
+      commentCount: result.proposal.commentCount,
+    };
+    if (
+      result.message.groupId === activeGroupId.value &&
+      !messages.value.some((item) => item.id === result.message.id)
+    ) {
+      messages.value.push(result.message);
+    }
+    await scrollProposalDiscussion();
+    await nextTick(scrollToBottom);
+  } catch (err) {
+    message.error(apiErrorMessage(err));
+  } finally {
+    proposalCommentSending.value = false;
+  }
+}
+
+function onProposalCommentKeydown(event: KeyboardEvent) {
+  if (event.shiftKey) return;
+  event.preventDefault();
+  void sendProposalComment();
 }
 
 async function submitProposal() {
@@ -317,16 +455,15 @@ async function submitProposal() {
   }
   proposalSubmitting.value = true;
   try {
-    const created = await apiCreateProposal({
+    await apiCreateProposal({
       title: proposalForm.value.title.trim(),
       proposalTime: proposalForm.value.proposalTime,
       proposerInfo: proposalForm.value.proposerInfo.trim(),
       content: proposalForm.value.content.trim(),
     });
     message.success('提案已提交');
-    proposals.value = await apiProposals(50);
-    selectedProposal.value = created;
-    proposalFormOpen.value = false;
+    functionCreateOpen.value = false;
+    await loadProposals();
   } catch (err) {
     proposalError.value = apiErrorMessage(err);
   } finally {
@@ -403,175 +540,257 @@ onBeforeUnmount(() => {
           </footer>
         </aside>
 
-        <section class="chat-column">
-          <header class="chat-head">
-            <div class="chat-title-wrap">
-              <h2 class="chat-title">{{ activeGroup?.name || '群聊' }}</h2>
-              <p class="chat-subtitle">{{ activeGroup?.description || '思想交流 · 互相学习 · 共同进步' }}</p>
-            </div>
-            <div class="chat-status">
-              <span class="chat-conn" :class="{ off: !connected }">{{ connected ? '已连接' : '连接中...' }}</span>
-              <button class="chat-proposal-shortcut" type="button" @click="openProposalTab">
-                <FileTextOutlined /> 提案
-              </button>
-            </div>
+        <section v-if="activeProposal" class="proposal-detail-page" data-testid="proposal-detail-page">
+          <header class="proposal-detail-head">
+            <button class="proposal-back" type="button" data-testid="proposal-back" @click="closeProposalDetail">
+              <ArrowLeftOutlined /> 返回提案列表
+            </button>
+            <span class="proposal-detail-status">提案详情 · 讨论同步群聊</span>
           </header>
 
-          <section class="chat-body">
-            <div ref="messagesEl" class="message-area" data-testid="chat-messages" @scroll.passive="onMessagesScroll">
-              <div v-if="loading" class="chat-placeholder">正在加载聊天记录...</div>
-              <template v-else>
-                <button v-if="hasMore" class="load-earlier" type="button" :disabled="loadingEarlier" @click="loadEarlier">
-                  {{ loadingEarlier ? '加载中...' : '上滑加载更早的消息' }}
-                </button>
-                <div v-else class="chat-start">— 这是「{{ activeGroup?.name }}」的起点 —</div>
+          <div class="proposal-detail-scroll">
+            <div v-if="proposalDetailLoading" class="proposal-detail-loading">正在加载提案...</div>
+            <template v-else>
+              <article class="proposal-full" data-testid="proposal-detail">
+                <span class="proposal-kicker">提案正文</span>
+                <h1>{{ activeProposal.title }}</h1>
+                <div class="proposal-meta proposal-detail-meta">
+                  <span><ClockCircleOutlined /> 提案时间：{{ formatProposalTime(activeProposal.proposalTime) }}</span>
+                  <span>发起人：{{ activeProposal.proposerInfo }}</span>
+                  <span>记录于 {{ formatCreatedAt(activeProposal.createdAt) }}</span>
+                </div>
+                <div class="proposal-full-content">{{ activeProposal.content }}</div>
+                <div class="proposal-vote-row">
+                  <button
+                    class="proposal-vote-btn"
+                    :class="{ voted: activeProposal.voted }"
+                    type="button"
+                    :disabled="proposalVotePending"
+                    data-testid="proposal-vote"
+                    @click="toggleProposalVote"
+                  >
+                    <LikeFilled v-if="activeProposal.voted" />
+                    <LikeOutlined v-else />
+                    {{ activeProposal.voted ? '已投票支持' : '投票支持' }}
+                    <strong>{{ activeProposal.voteCount }}</strong>
+                  </button>
+                  <span class="proposal-vote-hint">赞成该提案的同志可投票，再次点击取消</span>
+                </div>
+              </article>
 
-                <p v-if="messages.length === 0" class="chat-placeholder">
-                  还没有消息，向同志们问声好，开始今天的交流吧。
-                </p>
+              <section class="proposal-discussion">
+                <header class="proposal-discussion-head">
+                  <div>
+                    <h2>提案讨论</h2>
+                    <p>区别于普通回复，支持连续长讨论；发言会同步到群聊「{{ activeGroup?.name || '当前群聊' }}」。</p>
+                  </div>
+                  <span>{{ activeProposal.commentCount }} 条发言</span>
+                </header>
+                <div ref="proposalDiscussionEl" class="proposal-discussion-list" data-testid="proposal-comments">
+                  <p v-if="!proposalComments.length" class="proposal-discussion-empty">还没有同志发言，来发表第一条意见。</p>
+                  <article v-for="comment in proposalComments" :key="comment.id" class="proposal-comment">
+                    <UserAvatar :user="comment.user" :size="32" />
+                    <div class="proposal-comment-main">
+                      <div class="proposal-comment-meta">
+                        <strong>{{ comment.user.nickname }}</strong>
+                        <span v-if="comment.user.isAdmin" class="admin-badge">管理员</span>
+                        <span>{{ formatCreatedAt(comment.createdAt) }}</span>
+                      </div>
+                      <p>{{ comment.content }}</p>
+                    </div>
+                  </article>
+                </div>
+              </section>
+            </template>
+          </div>
 
-                <ChatMessage
-                  v-for="item in messages"
-                  :key="item.id"
-                  :message="item"
-                  :self="item.user.id === auth.user?.id"
-                />
-              </template>
+          <footer class="proposal-composer">
+            <p class="proposal-sync-tip">提案讨论会同步到「{{ activeGroup?.name || '当前群聊' }}」</p>
+            <div class="proposal-composer-row">
+              <a-textarea
+                v-model:value="proposalCommentDraft"
+                :auto-size="{ minRows: 1, maxRows: 4 }"
+                :maxlength="2000"
+                placeholder="在提案内发表意见...（Enter 发送，Shift+Enter 换行）"
+                data-testid="proposal-comment-input"
+                @press-enter="onProposalCommentKeydown"
+              />
+              <button
+                class="send-btn"
+                type="button"
+                :disabled="!proposalCommentDraft.trim() || proposalCommentSending"
+                data-testid="proposal-comment-send"
+                @click="sendProposalComment"
+              >
+                <SendOutlined />
+                发言
+              </button>
             </div>
-
-            <footer class="chat-composer">
-              <div class="composer-tools">
-                <input
-                  ref="imageInput"
-                  type="file"
-                  accept="image/png,image/jpeg,image/gif,image/webp"
-                  class="chat-file-input"
-                  data-testid="chat-image-input"
-                  @change="onImageChange"
-                />
-                <button class="tool-btn" type="button" :disabled="uploading" title="发送图片" @click="triggerImage">
-                  <PictureOutlined />
-                  <span>{{ uploading ? '上传中' : '图片' }}</span>
-                </button>
-              </div>
-              <div class="composer-input-row">
-                <a-textarea
-                  v-model:value="draft"
-                  :auto-size="{ minRows: 1, maxRows: 4 }"
-                  :maxlength="1000"
-                  placeholder="说点什么...（Enter 发送，Shift+Enter 换行）"
-                  class="chat-input"
-                  data-testid="chat-input"
-                  @press-enter="onPressEnter"
-                />
-                <button class="send-btn" type="button" :disabled="!draft.trim()" data-testid="chat-send" @click="sendText">
-                  <SendOutlined />
-                  发送
-                </button>
-              </div>
-            </footer>
-          </section>
+          </footer>
         </section>
 
-        <aside class="function-panel" data-testid="proposal-panel">
-          <nav class="function-tabs" aria-label="群聊功能">
-            <p class="function-label">功能</p>
-            <button
-              class="function-tab"
-              :class="{ active: activeFunction === 'proposals' }"
-              type="button"
-              data-testid="proposal-option"
-              @click="openProposalTab"
-            >
-              <FileTextOutlined />
-              <span>提案</span>
-              <em>{{ proposals.length }}</em>
-            </button>
-          </nav>
-
-          <div class="function-content">
-            <header class="proposal-head">
-              <div>
-                <span class="proposal-kicker">提案</span>
-                <h2>{{ proposalFormOpen ? '发起提案' : selectedProposal ? '提案详情' : '提案' }}</h2>
+        <template v-else>
+          <section class="chat-column">
+            <header class="chat-head">
+              <div class="chat-title-wrap">
+                <h2 class="chat-title">{{ activeGroup?.name || '群聊' }}</h2>
+                <p class="chat-subtitle">{{ activeGroup?.description || '思想交流 · 互相学习 · 共同进步' }}</p>
               </div>
-              <button class="proposal-new-btn" type="button" data-testid="proposal-new" @click="startNewProposal">
-                <PlusOutlined /> 发起提案
+              <div class="chat-status">
+                <span class="chat-conn" :class="{ off: !connected }">{{ connected ? '已连接' : '连接中...' }}</span>
+                <button
+                  class="chat-proposal-shortcut"
+                  :class="{ active: functionOpen }"
+                  type="button"
+                  data-testid="function-trigger"
+                  @click="toggleFunctionPanel"
+                >
+                  <AppstoreOutlined /> 功能
+                </button>
+              </div>
+            </header>
+
+            <section class="chat-body">
+              <div ref="messagesEl" class="message-area" data-testid="chat-messages" @scroll.passive="onMessagesScroll">
+                <div v-if="loading" class="chat-placeholder">正在加载聊天记录...</div>
+                <template v-else>
+                  <button v-if="hasMore" class="load-earlier" type="button" :disabled="loadingEarlier" @click="loadEarlier">
+                    {{ loadingEarlier ? '加载中...' : '上滑加载更早的消息' }}
+                  </button>
+                  <div v-else class="chat-start">— 这是「{{ activeGroup?.name }}」的起点 —</div>
+
+                  <p v-if="messages.length === 0" class="chat-placeholder">
+                    还没有消息，向同志们问声好，开始今天的交流吧。
+                  </p>
+
+                  <ChatMessage
+                    v-for="item in messages"
+                    :key="item.id"
+                    :message="item"
+                    :self="item.user.id === auth.user?.id"
+                    @open-proposal="openProposalFromMessage"
+                  />
+                </template>
+              </div>
+
+              <footer class="chat-composer">
+                <div class="composer-tools">
+                  <input
+                    ref="imageInput"
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    class="chat-file-input"
+                    data-testid="chat-image-input"
+                    @change="onImageChange"
+                  />
+                  <button class="tool-btn" type="button" :disabled="uploading" title="发送图片" @click="triggerImage">
+                    <PictureOutlined />
+                    <span>{{ uploading ? '上传中' : '图片' }}</span>
+                  </button>
+                </div>
+                <div class="composer-input-row">
+                  <a-textarea
+                    v-model:value="draft"
+                    :auto-size="{ minRows: 1, maxRows: 4 }"
+                    :maxlength="1000"
+                    placeholder="说点什么...（Enter 发送，Shift+Enter 换行）"
+                    class="chat-input"
+                    data-testid="chat-input"
+                    @press-enter="onPressEnter"
+                  />
+                  <button class="send-btn" type="button" :disabled="!draft.trim()" data-testid="chat-send" @click="sendText">
+                    <SendOutlined />
+                    发送
+                  </button>
+                </div>
+              </footer>
+            </section>
+          </section>
+
+          <aside v-if="functionOpen" class="function-panel" data-testid="proposal-panel">
+            <header class="function-panel-head">
+              <div>
+                <span class="function-kicker">功能</span>
+                <h2>提案</h2>
+              </div>
+              <button class="panel-close" type="button" aria-label="收起功能面板" @click="closeFunctionPanel">
+                <CloseOutlined />
               </button>
             </header>
 
-            <form v-if="proposalFormOpen" class="proposal-form" @submit.prevent="submitProposal">
-              <label class="proposal-field">
-                <span>提案标题</span>
-                <a-input v-model:value="proposalForm.title" :maxlength="120" placeholder="请填写提案标题" data-testid="proposal-title" />
-              </label>
-              <label class="proposal-field">
-                <span>提案时间</span>
-                <input v-model="proposalForm.proposalTime" class="proposal-datetime" type="datetime-local" data-testid="proposal-time" />
-              </label>
-              <label class="proposal-field">
-                <span>发起人信息</span>
-                <a-input v-model:value="proposalForm.proposerInfo" :maxlength="255" placeholder="姓名 / 用户名 / 社区号" data-testid="proposal-proposer" />
-              </label>
-              <label class="proposal-field">
-                <span>提案正文</span>
-                <a-textarea
-                  v-model:value="proposalForm.content"
-                  :rows="5"
-                  :maxlength="5000"
-                  show-count
-                  placeholder="请说明提案背景、目标与具体建议"
-                  data-testid="proposal-content"
-                />
-              </label>
-              <p v-if="proposalError" class="proposal-error">{{ proposalError }}</p>
-              <div class="proposal-form-actions">
-                <button class="proposal-cancel" type="button" @click="cancelProposalForm">取消</button>
-                <button class="proposal-submit" type="submit" :disabled="proposalSubmitting" data-testid="proposal-submit">
-                  {{ proposalSubmitting ? '提交中...' : '提交提案' }}
+            <div class="function-content">
+              <form v-if="functionCreateOpen" class="proposal-form" @submit.prevent="submitProposal">
+                <button class="proposal-back-list" type="button" @click="cancelProposalForm">
+                  <ArrowLeftOutlined /> 返回提案列表
                 </button>
-              </div>
-            </form>
+                <h3 class="proposal-form-title">发起提案</h3>
+                <label class="proposal-field">
+                  <span>提案标题</span>
+                  <a-input v-model:value="proposalForm.title" :maxlength="120" placeholder="请填写提案标题" data-testid="proposal-title" />
+                </label>
+                <label class="proposal-field">
+                  <span>提案时间</span>
+                  <input v-model="proposalForm.proposalTime" class="proposal-datetime" type="datetime-local" data-testid="proposal-time" />
+                </label>
+                <label class="proposal-field">
+                  <span>发起人信息</span>
+                  <a-input v-model:value="proposalForm.proposerInfo" :maxlength="255" placeholder="姓名 / 用户名 / 社区号" data-testid="proposal-proposer" />
+                </label>
+                <label class="proposal-field">
+                  <span>提案正文</span>
+                  <a-textarea
+                    v-model:value="proposalForm.content"
+                    :rows="5"
+                    :maxlength="5000"
+                    show-count
+                    placeholder="请说明提案背景、目标与具体建议"
+                    data-testid="proposal-content"
+                  />
+                </label>
+                <p v-if="proposalError" class="proposal-error">{{ proposalError }}</p>
+                <div class="proposal-form-actions">
+                  <button class="proposal-cancel" type="button" @click="cancelProposalForm">取消</button>
+                  <button class="proposal-submit" type="submit" :disabled="proposalSubmitting" data-testid="proposal-submit">
+                    {{ proposalSubmitting ? '提交中...' : '提交提案' }}
+                  </button>
+                </div>
+              </form>
 
-            <div v-else-if="selectedProposal" class="proposal-detail" data-testid="proposal-detail">
-              <h3>{{ selectedProposal.title }}</h3>
-              <div class="proposal-meta">
-                <span><ClockCircleOutlined /> {{ formatProposalTime(selectedProposal.proposalTime) }}</span>
-                <span>发起人：{{ selectedProposal.proposerInfo }}</span>
-                <span>记录于 {{ formatCreatedAt(selectedProposal.createdAt) }}</span>
-              </div>
-              <div class="proposal-content">{{ selectedProposal.content }}</div>
+              <template v-else>
+                <header class="proposal-head">
+                  <div>
+                    <span class="proposal-kicker">提案列表</span>
+                    <h2>共 {{ proposals.length }} 条提案</h2>
+                  </div>
+                  <button class="proposal-new-btn" type="button" data-testid="proposal-new" @click="startNewProposal">
+                    <PlusOutlined /> 发起
+                  </button>
+                </header>
+
+                <a-spin :spinning="proposalsLoading">
+                  <p v-if="!proposals.length" class="proposal-list-empty">暂无提案，点击「发起」创建第一条。</p>
+                  <div v-else class="proposal-list">
+                    <button
+                      v-for="proposal in proposals"
+                      :key="proposal.id"
+                      class="proposal-item"
+                      type="button"
+                      data-testid="proposal-mini"
+                      @click="openProposalDetail(proposal)"
+                    >
+                      <strong>{{ proposal.title }}</strong>
+                      <span>{{ proposal.proposerInfo }}</span>
+                      <span>{{ formatProposalTime(proposal.proposalTime) }}</span>
+                      <span class="proposal-item-stats">
+                        <LikeOutlined /> {{ proposal.voteCount }} · <MessageOutlined /> {{ proposal.commentCount }}
+                      </span>
+                    </button>
+                  </div>
+                </a-spin>
+              </template>
             </div>
-
-            <div v-else class="proposal-empty">
-              <FileTextOutlined />
-              <p>暂无提案</p>
-            </div>
-
-            <section class="proposal-list-section">
-              <div class="proposal-list-head">
-                <h4>提案列表</h4>
-                <span>{{ proposals.length }} 条</span>
-              </div>
-              <div v-if="proposals.length" class="proposal-list">
-                <button
-                  v-for="proposal in proposals"
-                  :key="proposal.id"
-                  class="proposal-item"
-                  :class="{ active: selectedProposal?.id === proposal.id && !proposalFormOpen }"
-                  type="button"
-                  data-testid="proposal-mini"
-                  @click="selectProposal(proposal)"
-                >
-                  <strong>{{ proposal.title }}</strong>
-                  <span>{{ proposal.proposerInfo }}</span>
-                  <span>{{ formatProposalTime(proposal.proposalTime) }} · {{ formatCreatedAt(proposal.createdAt) }}</span>
-                </button>
-              </div>
-              <p v-else class="proposal-list-empty">暂无提案，提交第一条后会显示在这里。</p>
-            </section>
-          </div>
-        </aside>
+          </aside>
+        </template>
       </div>
     </div>
   </AppShell>
@@ -1244,6 +1463,337 @@ onBeforeUnmount(() => {
   margin: 6px 0;
   color: var(--rl-text-secondary);
   font-size: 9px;
+}
+
+.chat-proposal-shortcut.active {
+  border-color: #efc6cc;
+  background: #fff1f0;
+}
+
+.function-panel-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 14px 12px 12px;
+  border-bottom: 1px solid var(--rl-border);
+  background: #fdfbf7;
+}
+
+.function-kicker {
+  color: var(--rl-primary);
+  font-size: 9px;
+  letter-spacing: 1px;
+}
+
+.function-panel-head h2 {
+  margin: 3px 0 0;
+  color: var(--rl-deep);
+  font-family: var(--rl-serif);
+  font-size: 17px;
+}
+
+.panel-close {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--rl-border);
+  border-radius: 4px;
+  background: #fff;
+  color: var(--rl-text-secondary);
+  cursor: pointer;
+}
+
+.proposal-back-list {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-bottom: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--rl-primary);
+  font-family: inherit;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.proposal-form-title {
+  margin: 0 0 12px;
+  color: var(--rl-deep);
+  font-family: var(--rl-serif);
+  font-size: 17px;
+}
+
+.proposal-item-stats {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: #946b2d !important;
+}
+
+/* 提案详情页（替代聊天主区 + 功能面板） */
+.proposal-detail-page {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 0;
+  flex-direction: column;
+  background: #fff;
+}
+
+.proposal-detail-head {
+  display: flex;
+  flex: 0 0 56px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 22px;
+  border-bottom: 1px solid var(--rl-border);
+  background: #fdfbf7;
+}
+
+.proposal-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 9px;
+  border: 1px solid var(--rl-border);
+  border-radius: 5px;
+  background: #fff;
+  color: var(--rl-primary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.proposal-back:hover {
+  background: #fff1f0;
+}
+
+.proposal-detail-status {
+  color: var(--rl-text-secondary);
+  font-size: 10px;
+}
+
+.proposal-detail-scroll {
+  min-height: 0;
+  flex: 1;
+  padding: 28px 34px 40px;
+  overflow-y: auto;
+}
+
+.proposal-detail-loading {
+  padding: 60px;
+  color: var(--rl-text-secondary);
+  font-size: 13px;
+  text-align: center;
+}
+
+.proposal-full {
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--rl-border-light);
+}
+
+.proposal-full h1 {
+  margin: 6px 0 14px;
+  color: var(--rl-deep);
+  font-family: var(--rl-serif);
+  font-size: clamp(24px, 2.2vw, 34px);
+  line-height: 1.35;
+}
+
+.proposal-detail-meta {
+  max-width: 820px;
+  margin-bottom: 20px;
+}
+
+.proposal-full-content {
+  max-width: 1000px;
+  color: var(--rl-text);
+  font-family: var(--rl-serif);
+  font-size: 16px;
+  line-height: 2;
+  white-space: pre-wrap;
+}
+
+.proposal-vote-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+
+.proposal-vote-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid #efc6cc;
+  border-radius: 6px;
+  background: #fff8f7;
+  color: var(--rl-primary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.proposal-vote-btn strong {
+  padding-left: 3px;
+  font-size: 14px;
+}
+
+.proposal-vote-btn.voted {
+  background: var(--rl-primary);
+  color: #fff;
+}
+
+.proposal-vote-hint {
+  color: var(--rl-text-secondary);
+  font-size: 10px;
+}
+
+.proposal-discussion {
+  margin-top: 24px;
+}
+
+.proposal-discussion-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--rl-border-light);
+}
+
+.proposal-discussion-head h2 {
+  margin: 0;
+  color: var(--rl-deep);
+  font-family: var(--rl-serif);
+  font-size: 18px;
+}
+
+.proposal-discussion-head p {
+  margin: 4px 0 0;
+  color: var(--rl-text-secondary);
+  font-size: 10px;
+}
+
+.proposal-discussion-head > span {
+  flex: 0 0 auto;
+  color: var(--rl-text-secondary);
+  font-size: 10px;
+}
+
+.proposal-discussion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.proposal-discussion-empty {
+  padding: 22px 0;
+  color: var(--rl-text-secondary);
+  font-size: 12px;
+  text-align: center;
+}
+
+.proposal-comment {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--rl-border-light);
+  border-radius: 7px;
+  background: #fffdfb;
+}
+
+.proposal-comment-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.proposal-comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--rl-text-secondary);
+  font-size: 9px;
+}
+
+.proposal-comment-meta strong {
+  color: var(--rl-text);
+  font-size: 11px;
+}
+
+.proposal-comment-main p {
+  margin: 5px 0 0;
+  color: var(--rl-text);
+  font-size: 13px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.admin-badge {
+  padding: 0 5px;
+  border: 1px solid #91caff;
+  border-radius: 3px;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
+}
+
+.proposal-composer {
+  flex: 0 0 auto;
+  padding: 8px 22px 14px;
+  border-top: 1px solid var(--rl-border);
+  background: #fdfbf7;
+}
+
+.proposal-sync-tip {
+  margin: 0 0 6px;
+  color: #946b2d;
+  font-size: 10px;
+}
+
+.proposal-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 1199px) {
+  .proposal-detail-scroll {
+    padding: 22px 24px 34px;
+  }
+}
+
+@media (max-width: 767px) {
+  .proposal-detail-head {
+    padding: 0 12px;
+  }
+
+  .proposal-detail-scroll {
+    padding: 16px 14px 28px;
+  }
+
+  .proposal-full h1 {
+    font-size: 24px;
+  }
+
+  .proposal-full-content {
+    font-size: 14px;
+  }
+
+  .proposal-composer {
+    padding: 8px 12px 12px;
+  }
 }
 
 @media (max-width: 1199px) {

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createTestContext } from './helpers/context.js';
+import { createTestContext, openSocket, waitForConnection, waitForEvent } from './helpers/context.js';
 
 describe('群聊提案', () => {
   let ctx;
@@ -91,5 +91,90 @@ describe('群聊提案', () => {
     await ctx.deps.db.query('UPDATE users SET status = 1 WHERE id = ?', [alice.user.id]);
     const restored = await ctx.agent.get('/api/proposals').set(auth(bob.token));
     expect(restored.body.list.some((item) => item.id === created.body.proposal.id)).toBe(true);
+  });
+
+  it('提案讨论支持连续发言、投票，并同步到所选群聊', async () => {
+    const created = await createProposal(alice.token);
+    const proposalId = created.body.proposal.id;
+
+    const first = await ctx.agent
+      .post(`/api/proposals/${proposalId}/comments`)
+      .set(auth(alice.token))
+      .send({ content: '第一轮意见：建议固定学习时间。', groupId: 2 });
+    expect(first.status).toBe(201);
+    expect(first.body.comment.content).toContain('第一轮意见');
+    expect(first.body.proposal.commentCount).toBe(1);
+    expect(first.body.message).toMatchObject({
+      groupId: 2,
+      proposalId,
+      proposalTitle: '关于改进理论学习小组的建议',
+    });
+
+    const second = await ctx.agent
+      .post(`/api/proposals/${proposalId}/comments`)
+      .set(auth(bob.token))
+      .send({ content: '补充意见：可以先试行一个月。', groupId: 1 });
+    expect(second.status).toBe(201);
+
+    const comments = await ctx.agent
+      .get(`/api/proposals/${proposalId}/comments`)
+      .set(auth(alice.token));
+    expect(comments.status).toBe(200);
+    expect(comments.body.list.map((item) => item.content)).toEqual([
+      '第一轮意见：建议固定学习时间。',
+      '补充意见：可以先试行一个月。',
+    ]);
+    expect(comments.body.list[0].user.isAdmin).toBe(false);
+
+    const group2 = await ctx.agent.get('/api/chat/history?groupId=2&limit=20');
+    expect(group2.body.list.some((item) => item.proposalId === proposalId && item.content.includes('第一轮意见'))).toBe(true);
+    expect(group2.body.list.find((item) => item.proposalId === proposalId)?.proposalTitle).toBe('关于改进理论学习小组的建议');
+    const group1 = await ctx.agent.get('/api/chat/history?groupId=1&limit=20');
+    expect(group1.body.list.some((item) => item.content.includes('第一轮意见'))).toBe(false);
+    expect(group1.body.list.some((item) => item.content.includes('补充意见'))).toBe(true);
+
+    const vote = await ctx.agent.post(`/api/proposals/${proposalId}/vote`).set(auth(alice.token));
+    expect(vote.status).toBe(200);
+    expect(vote.body).toMatchObject({ voted: true, voteCount: 1 });
+    const cancelVote = await ctx.agent.post(`/api/proposals/${proposalId}/vote`).set(auth(alice.token));
+    expect(cancelVote.body).toMatchObject({ voted: false, voteCount: 0 });
+    const bobVote = await ctx.agent.post(`/api/proposals/${proposalId}/vote`).set(auth(bob.token));
+    expect(bobVote.body).toMatchObject({ voted: true, voteCount: 1 });
+
+    const detail = await ctx.agent.get(`/api/proposals/${proposalId}`).set(auth(alice.token));
+    expect(detail.body.proposal.commentCount).toBe(2);
+    expect(detail.body.proposal.voteCount).toBe(1);
+    expect(detail.body.proposal.voted).toBe(false);
+
+    const emptyComment = await ctx.agent
+      .post(`/api/proposals/${proposalId}/comments`)
+      .set(auth(alice.token))
+      .send({ content: '   ', groupId: 1 });
+    expect(emptyComment.status).toBe(400);
+  });
+
+  it('提案讨论通过 Socket.IO 实时同步到群聊房间', async () => {
+    const socket = openSocket(ctx.baseUrl, alice.token);
+    try {
+      await waitForConnection(socket);
+      const created = await createProposal(alice.token, { title: '实时同步提案' });
+      const proposalId = created.body.proposal.id;
+      const received = waitForEvent(socket, 'chat:message');
+      const response = await ctx.agent
+        .post(`/api/proposals/${proposalId}/comments`)
+        .set(auth(alice.token))
+        .send({ content: '这是一条需要实时同步的提案讨论。', groupId: 1 });
+      expect(response.status).toBe(201);
+      const message = await received;
+      expect(message).toMatchObject({
+        groupId: 1,
+        proposalId,
+        proposalTitle: '实时同步提案',
+        content: '这是一条需要实时同步的提案讨论。',
+      });
+      expect(message.user.nickname).toBe(alice.user.nickname);
+    } finally {
+      socket.close();
+    }
   });
 });

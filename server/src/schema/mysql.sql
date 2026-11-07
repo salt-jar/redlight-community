@@ -106,9 +106,11 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     user_id    BIGINT      NOT NULL,
     type       TINYINT     DEFAULT 1 COMMENT '1文字 2图片',
     content    TEXT        COMMENT '文字内容或图片URL',
+    proposal_id BIGINT     NULL COMMENT '同步自提案讨论的提案ID',
     created_at DATETIME    DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_created_at (created_at DESC),
-    INDEX idx_chat_group (group_id, id)
+    INDEX idx_chat_group (group_id, id),
+    INDEX idx_chat_proposal (proposal_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊消息';
 
 -- 提案（群聊右侧功能栏）
@@ -123,6 +125,27 @@ CREATE TABLE IF NOT EXISTS proposals (
     INDEX idx_proposals_created (created_at DESC),
     INDEX idx_proposals_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提案';
+
+CREATE TABLE IF NOT EXISTS proposal_comments (
+    id              BIGINT      PRIMARY KEY AUTO_INCREMENT,
+    proposal_id     BIGINT      NOT NULL,
+    user_id         BIGINT      NOT NULL,
+    group_id        BIGINT      NOT NULL,
+    content         TEXT        NOT NULL,
+    chat_message_id BIGINT      NULL,
+    created_at      DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_proposal_comments (proposal_id, id),
+    INDEX idx_proposal_comments_group (group_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提案讨论发言';
+
+CREATE TABLE IF NOT EXISTS proposal_votes (
+    id          BIGINT      PRIMARY KEY AUTO_INCREMENT,
+    proposal_id BIGINT      NOT NULL,
+    user_id     BIGINT      NOT NULL,
+    created_at  DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_proposal_vote (proposal_id, user_id),
+    INDEX idx_proposal_votes (proposal_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提案投票';
 
 -- 组织（如 001）
 CREATE TABLE IF NOT EXISTS organizations (

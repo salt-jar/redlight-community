@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     user_id    INTEGER NOT NULL,
     type       INTEGER DEFAULT 1,
     content    TEXT,
+    proposal_id INTEGER NULL,
     created_at TEXT    DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at DESC);
@@ -111,6 +112,29 @@ CREATE TABLE IF NOT EXISTS proposals (
 );
 CREATE INDEX IF NOT EXISTS idx_proposals_created ON proposals(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_proposals_user ON proposals(user_id);
+
+-- 提案讨论发言（同时同步到群聊）
+CREATE TABLE IF NOT EXISTS proposal_comments (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_id     INTEGER NOT NULL,
+    user_id         INTEGER NOT NULL,
+    group_id        INTEGER NOT NULL,
+    content         TEXT    NOT NULL,
+    chat_message_id INTEGER NULL,
+    created_at      TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_proposal_comments ON proposal_comments(proposal_id, id);
+CREATE INDEX IF NOT EXISTS idx_proposal_comments_group ON proposal_comments(group_id);
+
+-- 提案投票
+CREATE TABLE IF NOT EXISTS proposal_votes (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    proposal_id INTEGER NOT NULL,
+    user_id     INTEGER NOT NULL,
+    created_at  TEXT    DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (proposal_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_proposal_votes ON proposal_votes(proposal_id);
 
 -- 组织（如 001）
 CREATE TABLE IF NOT EXISTS organizations (

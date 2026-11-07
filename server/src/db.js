@@ -28,6 +28,7 @@ async function createSqliteDb(config) {
   ensureSqliteStatusColumns(sqlite);
   ensureSqliteChatGroups(sqlite);
   ensureSqliteOrganizationAdminUser(sqlite);
+  ensureSqliteProposalDiscussion(sqlite);
 
   const normalize = (params = []) =>
     params.map((value) => {
@@ -130,6 +131,14 @@ function ensureSqliteOrganizationAdminUser(sqlite) {
     sqlite.exec('ALTER TABLE organization_admins ADD COLUMN user_id INTEGER NULL');
   }
   sqlite.exec('CREATE INDEX IF NOT EXISTS idx_org_admins_user ON organization_admins(user_id)');
+}
+
+function ensureSqliteProposalDiscussion(sqlite) {
+  const columns = new Set(sqlite.prepare("PRAGMA table_info('chat_messages')").all().map((column) => column.name));
+  if (!columns.has('proposal_id')) {
+    sqlite.exec('ALTER TABLE chat_messages ADD COLUMN proposal_id INTEGER NULL');
+  }
+  sqlite.exec('CREATE INDEX IF NOT EXISTS idx_chat_proposal ON chat_messages(proposal_id)');
 }
 
 async function createMysqlDb(config) {  const mysql = await import('mysql2/promise');

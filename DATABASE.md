@@ -72,7 +72,10 @@ WHERE username = 'redstar_2026';
 | `chat_groups` | 群聊分组：赤光总群、理论学习、文献研究、青年同志；控制群名称和顺序 |
 | `users.role` | `0` 普通用户；`1` 管理员社区账号（群聊蓝色「管理员」标识，可使用 `/api/moderation` 直接治理） |
 | `chat_messages.group_id` | 消息所属群，群聊记录按群隔离 |
+| `chat_messages.proposal_id` | 非空表示该消息由提案讨论同步而来，用于群聊内右键打开提案 |
 | `proposals` | 群聊提案：标题、提案时间、发起人信息、正文、发起用户 |
+| `proposal_comments` | 提案讨论发言：内容、发言用户、同步到的群、对应群聊消息 |
+| `proposal_votes` | 提案投票，`UNIQUE(proposal_id, user_id)` 保证每人一票 |
 | `posts.status` | `1` 正常、`0` 已下架 |
 | `books.status` | `1` 正常、`0` 已下架 |
 
@@ -113,9 +116,17 @@ FROM chat_groups g LEFT JOIN chat_messages m ON m.group_id = g.id
 GROUP BY g.id, g.name ORDER BY g.sort_order;
 
 -- 查看提案
-SELECT p.id, p.title, p.proposal_time, p.proposer_info, u.nickname, p.created_at
+SELECT p.id, p.title, p.proposal_time, p.proposer_info, u.nickname, p.created_at,
+       (SELECT COUNT(*) FROM proposal_votes v WHERE v.proposal_id = p.id) AS votes,
+       (SELECT COUNT(*) FROM proposal_comments c WHERE c.proposal_id = p.id) AS comments
 FROM proposals p JOIN users u ON u.id = p.user_id
 ORDER BY p.id DESC;
+
+-- 查看提案讨论与同步到的群聊消息
+SELECT c.id, c.proposal_id, c.content, c.group_id, c.chat_message_id, u.nickname, c.created_at
+FROM proposal_comments c JOIN users u ON u.id = c.user_id
+WHERE c.proposal_id = ?
+ORDER BY c.id;
 ```
 
 ### 可读视图 `login_log_details`

@@ -9,7 +9,7 @@ const groupRoom = (groupId) => `chat:group:${groupId}`;
  * 创建 Socket.IO 服务：握手 JWT 鉴权、群聊房间、消息落库后广播、在线用户统计。
  * @param {import('node:http').Server} httpServer
  */
-export function createSocket(httpServer, { db, config, online, logger = console }) {
+export function createSocket(httpServer, { db, config, online, chatEvents, logger = console }) {
   const io = new Server(httpServer, {
     cors: {
       origin: config.corsOrigin === '*' ? true : config.corsOrigin.split(',').map((item) => item.trim()),
@@ -17,6 +17,13 @@ export function createSocket(httpServer, { db, config, online, logger = console 
     },
     maxHttpBufferSize: 1e6,
   });
+
+  const onSyncedChatMessage = ({ groupId, message }) => {
+    if (!groupId || !message) return;
+    io.to(groupRoom(Number(groupId))).emit('chat:message', message);
+  };
+  chatEvents?.on?.('chat:message', onSyncedChatMessage);
+  httpServer.once('close', () => chatEvents?.off?.('chat:message', onSyncedChatMessage));
 
   io.use(async (socket, next) => {
     const header = socket.handshake.headers?.authorization || '';
@@ -93,8 +100,10 @@ export function createSocket(httpServer, { db, config, online, logger = console 
           [groupId, Number(user.id), type, content],
         );
         const rows = await db.query(
-          `SELECT m.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url, u.role AS author_role
-           FROM chat_messages m JOIN users u ON u.id = m.user_id WHERE m.id = ? LIMIT 1`,
+          `SELECT m.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url, u.role AS author_role,
+                  p.title AS proposal_title
+           FROM chat_messages m JOIN users u ON u.id = m.user_id
+           LEFT JOIN proposals p ON p.id = m.proposal_id WHERE m.id = ? LIMIT 1`,
           [result.insertId],
         );
         const message = serializeChatMessage(rows[0]);

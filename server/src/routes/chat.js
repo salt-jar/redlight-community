@@ -41,8 +41,10 @@ export function createChatRouter({ db, authGuard }) {
         : 'WHERE m.group_id = ? AND u.status = 1';
       const params = beforeId ? [groupId, beforeId, limit + 1] : [groupId, limit + 1];
       const rows = await db.query(
-        `SELECT m.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url, u.role AS author_role
+        `SELECT m.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url, u.role AS author_role,
+                p.title AS proposal_title
          FROM chat_messages m JOIN users u ON u.id = m.user_id
+         LEFT JOIN proposals p ON p.id = m.proposal_id
          ${where} ORDER BY m.id DESC LIMIT ?`,
         params,
       );

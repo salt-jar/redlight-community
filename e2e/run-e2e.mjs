@@ -607,13 +607,13 @@ async function main() {
   await waitForText(page.locator('[data-testid="chat-messages"]'), '同志们好，这是 E2E 自动化测试消息。');
   await shot(page, 'chat');
 
-  log('检查四栏无间隙布局、群列表与提案面板...');
-  const chatLayout = await page.evaluate(() => {
+  log('检查四栏布局、功能面板展开、提案详情与消息同步...');
+  const closedLayout = await page.evaluate(() => {
     const rect = (selector) => {
       const element = document.querySelector(selector);
       if (!element) return null;
       const box = element.getBoundingClientRect();
-      return { left: box.left, right: box.right, width: box.width, top: box.top, bottom: box.bottom };
+      return { left: box.left, right: box.right, width: box.width };
     };
     return {
       nav: rect('.side-nav'),
@@ -624,25 +624,49 @@ async function main() {
       viewportWidth: window.innerWidth,
     };
   });
-  assert(chatLayout.nav && chatLayout.group && chatLayout.chat && chatLayout.panel, '四栏布局应全部渲染');
-  assert(chatLayout.nav.left <= 1, `全局导航应紧贴左侧，实际 left=${chatLayout.nav.left}`);
-  assert(Math.abs(chatLayout.nav.right - chatLayout.group.left) <= 1, '全局导航与群列表之间不能有间隙');
-  assert(Math.abs(chatLayout.group.right - chatLayout.chat.left) <= 1, '群列表与聊天主区间不能有间隙');
-  assert(Math.abs(chatLayout.chat.right - chatLayout.panel.left) <= 1, '聊天主区与功能面板间不能有间隙');
-  assert(Math.abs(chatLayout.panel.right - chatLayout.viewportWidth) <= 1, '功能面板应贴住页面最右侧');
-  assert(Math.abs(chatLayout.chat.width / chatLayout.panel.width - 3) < 0.08, `功能面板应为主聊天区的 1/3：${chatLayout.chat.width}/${chatLayout.panel.width}`);
-  assert(chatLayout.overflow <= 1, `群聊四栏不应横向溢出：${chatLayout.overflow}px`);
-  assert((await page.locator('[data-testid="chat-group-list"] .group-item').count()) >= 4, '群列表应展示全部群聊');
+  assert(closedLayout.nav && closedLayout.group && closedLayout.chat, '群聊主布局应渲染');
+  assert(closedLayout.panel === null, '功能面板默认应收起');
+  assert(closedLayout.nav.left <= 1, `全局导航应紧贴左侧，实际 left=${closedLayout.nav.left}`);
+  assert(Math.abs(closedLayout.nav.right - closedLayout.group.left) <= 1, '全局导航与群列表之间不能有间隙');
+  assert(Math.abs(closedLayout.group.right - closedLayout.chat.left) <= 1, '群列表与聊天主区间不能有间隙');
+  assert(Math.abs(closedLayout.chat.right - closedLayout.viewportWidth) <= 1, '功能面板收起时聊天主区应撑满右侧');
+  assert(closedLayout.overflow <= 1, `群聊不应横向溢出：${closedLayout.overflow}px`);
+  await waitForText(page.locator('[data-testid="function-trigger"]'), '功能');
   assert((await page.locator('[data-testid="chat-at-all"]').count()) === 0, '@所有人功能应已删除');
-  assert(await page.locator('[data-testid="proposal-option"]').evaluate((el) => el.classList.contains('active')), '提案标签应默认激活');
-  await waitForTestId(page, 'proposal-panel');
-  await waitForTestId(page, 'proposal-title');
+  assert((await page.locator('[data-testid="chat-group-list"] .group-item').count()) >= 4, '群列表应展示全部群聊');
 
   await page.click('[data-group-id="2"]');
   await waitForText(page.locator('.chat-title'), '理论学习');
   await page.click('[data-group-id="1"]');
   await waitForText(page.locator('.chat-title'), '赤光总群');
 
+  await page.click('[data-testid="function-trigger"]');
+  await waitForTestId(page, 'proposal-panel');
+  const openLayout = await page.evaluate(() => {
+    const rect = (selector) => {
+      const element = document.querySelector(selector);
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right, width: box.width };
+    };
+    return {
+      nav: rect('.side-nav'),
+      group: rect('.group-column'),
+      chat: rect('.chat-column'),
+      panel: rect('.function-panel'),
+      viewportWidth: window.innerWidth,
+    };
+  });
+  assert(openLayout.nav.left <= 1, '全局导航应紧贴左侧');
+  assert(Math.abs(openLayout.group.right - openLayout.chat.left) <= 1, '群列表与聊天主区间不能有间隙');
+  assert(Math.abs(openLayout.chat.right - openLayout.panel.left) <= 1, '聊天主区与功能面板间不能有间隙');
+  assert(Math.abs(openLayout.panel.right - openLayout.viewportWidth) <= 1, '功能面板应贴住页面最右侧');
+  assert(
+    Math.abs(openLayout.chat.width / openLayout.panel.width - 3) < 0.08,
+    `功能面板应为主聊天区的 1/3：${openLayout.chat.width}/${openLayout.panel.width}`,
+  );
+
+  await page.click('[data-testid="proposal-new"]');
+  await waitForTestId(page, 'proposal-title');
   const proposalTitle = '关于每周学习安排的 E2E 提案';
   await fillTestId(page, 'proposal-title', proposalTitle);
   await fillTestId(page, 'proposal-time', '2026-11-10T19:30');
@@ -660,6 +684,28 @@ async function main() {
     (await page.locator('.proposal-list').evaluate((el) => getComputedStyle(el).flexDirection)) === 'column',
     '提案列表应为竖向单列',
   );
+
+  await page.locator('[data-testid="proposal-mini"]').filter({ hasText: proposalTitle }).first().click();
+  await waitForTestId(page, 'proposal-detail-page');
+  await waitForText(page.locator('[data-testid="proposal-detail"]'), proposalTitle);
+  await waitForTestId(page, 'proposal-back');
+  assert((await page.locator('[data-testid="proposal-detail-page"] .proposal-list').count()) === 0, '提案详情页不应再混排提案列表');
+  await page.locator('[data-testid="proposal-vote"]').click();
+  await waitForText(page.locator('[data-testid="proposal-vote"]'), '已投票支持');
+  const proposalComment = 'E2E 讨论意见：建议先在总群试行，再听取各群反馈。';
+  await fillTestId(page, 'proposal-comment-input', proposalComment);
+  await page.click('[data-testid="proposal-comment-send"]');
+  await waitForText(page.locator('[data-testid="proposal-comments"]'), proposalComment);
+  await page.click('[data-testid="proposal-back"]');
+  await waitForTestId(page, 'proposal-panel');
+  await waitForText(page.locator('[data-testid="chat-messages"]'), proposalComment);
+  const syncedProposalMessage = page.locator('.chat-msg.proposal-msg').filter({ hasText: proposalComment }).first();
+  assert(await syncedProposalMessage.count(), '提案讨论应同步为群聊中的提案消息');
+  await syncedProposalMessage.click({ button: 'right' });
+  await waitForTestId(page, 'proposal-detail-page');
+  await waitForText(page.locator('[data-testid="proposal-detail-page"]'), proposalTitle);
+  await page.click('[data-testid="proposal-back"]');
+  await waitForTestId(page, 'proposal-panel');
 
   const secondLogin = await apiLogin(`e2e-peer${Date.now()}@example.com`);
   const context2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'zh-CN' });
@@ -879,10 +925,10 @@ async function main() {
   await shot(page, 'report-dialog');
   await page.locator('.ant-modal-close').click();
 
-  log('检查群聊提案栏最终展示...');
+  log('检查群聊功能面板最终展示...');
   await page.goto(`${webBase}/chat`, { waitUntil: 'networkidle' });
   await waitForTestId(page, 'chat-input');
-  await page.click('[data-testid="proposal-option"]');
+  await page.click('[data-testid="function-trigger"]');
   await waitForTestId(page, 'proposal-panel');
   await waitForText(page.locator('[data-testid="proposal-mini"]'), '关于每周学习安排的 E2E 提案');
   await sleep(300);
@@ -955,6 +1001,23 @@ async function main() {
   await shot(orgPage, 'admin-groups');
   await adminContext.close();
   await orgContext.close();
+
+  log('检查提案详情页与群聊右键快捷入口...');
+  await page.goto(`${webBase}/chat`, { waitUntil: 'networkidle' });
+  await waitForTestId(page, 'chat-input');
+  await page.click('[data-testid="function-trigger"]');
+  await waitForTestId(page, 'proposal-panel');
+  await page.locator('[data-testid="proposal-mini"]').filter({ hasText: '关于每周学习安排的 E2E 提案' }).first().click();
+  await waitForTestId(page, 'proposal-detail-page');
+  await waitForText(page.locator('[data-testid="proposal-detail"]'), '关于每周学习安排的 E2E 提案');
+  await shot(page, 'proposal-detail');
+  await page.click('[data-testid="proposal-back"]');
+  await waitForTestId(page, 'proposal-panel');
+  await page.waitForSelector('.chat-msg.proposal-msg');
+  await page.locator('.chat-msg.proposal-msg').last().click({ button: 'right' });
+  await waitForTestId(page, 'proposal-detail-page');
+  await shot(page, 'proposal-right-click');
+  await page.click('[data-testid="proposal-back"]');
 
   assert(pageErrors.length === 0, `页面存在未捕获异常：${pageErrors.join(' | ')}`);
   const relevantConsoleErrors = consoleErrors.filter(

@@ -75,6 +75,8 @@ export interface ChatGroup {
 export interface ChatMessage {
   id: number;
   groupId?: number;
+  proposalId?: number | null;
+  proposalTitle?: string;
   type: 1 | 2;
   content: string;
   createdAt: string;
@@ -86,6 +88,19 @@ export interface Proposal {
   title: string;
   proposalTime: string;
   proposerInfo: string;
+  content: string;
+  createdAt: string;
+  voteCount: number;
+  commentCount: number;
+  voted: boolean;
+  user: PostAuthor;
+}
+
+export interface ProposalComment {
+  id: number;
+  proposalId: number;
+  groupId: number;
+  chatMessageId: number | null;
   content: string;
   createdAt: string;
   user: PostAuthor;
