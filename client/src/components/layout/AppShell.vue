@@ -5,13 +5,16 @@ import RightSidebar from '@/components/layout/RightSidebar.vue';
 import MobileTabBar from '@/components/layout/MobileTabBar.vue';
 import ProfileEditModal from '@/components/profile/ProfileEditModal.vue';
 
-withDefaults(defineProps<{ showRight?: boolean }>(), { showRight: true });
+withDefaults(defineProps<{ showRight?: boolean; fullBleed?: boolean }>(), {
+  showRight: true,
+  fullBleed: false,
+});
 </script>
 
 <template>
   <div class="app-shell">
     <AppHeader />
-    <div class="app-body" :class="{ 'no-right': !showRight }">
+    <div class="app-body" :class="{ 'no-right': !showRight, 'full-bleed': fullBleed }">
       <SideNav />
       <main class="app-main">
         <slot />

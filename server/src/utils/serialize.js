@@ -132,6 +132,7 @@ export function serializeBook(row) {
 export function serializeChatMessage(row) {
   return {
     id: toNumber(row.id),
+    groupId: toNumber(row.group_id, 1),
     type: toNumber(row.type, 1),
     content: row.content || '',
     createdAt: toIso(row.created_at),

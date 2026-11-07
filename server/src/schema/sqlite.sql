@@ -79,8 +79,19 @@ CREATE TABLE IF NOT EXISTS books (
 CREATE INDEX IF NOT EXISTS idx_books_category ON books(category);
 CREATE INDEX IF NOT EXISTS idx_books_created_at ON books(created_at DESC);
 
+-- 群聊分组
+CREATE TABLE IF NOT EXISTS chat_groups (
+    id            INTEGER PRIMARY KEY,
+    name          TEXT    NOT NULL,
+    description   TEXT    DEFAULT '',
+    sort_order    INTEGER DEFAULT 0,
+    status        INTEGER DEFAULT 1,
+    created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS chat_messages (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    group_id   INTEGER NOT NULL DEFAULT 1,
     user_id    INTEGER NOT NULL,
     type       INTEGER DEFAULT 1,
     content    TEXT,
@@ -100,15 +111,6 @@ CREATE TABLE IF NOT EXISTS proposals (
 );
 CREATE INDEX IF NOT EXISTS idx_proposals_created ON proposals(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_proposals_user ON proposals(user_id);
-
--- 群聊 @所有人 每周使用记录
-CREATE TABLE IF NOT EXISTS chat_at_all_usage (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id       INTEGER NOT NULL,
-    week_key      TEXT    NOT NULL,
-    created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_at_all_user_week ON chat_at_all_usage(user_id, week_key);
 
 -- 组织（如 001）
 CREATE TABLE IF NOT EXISTS organizations (

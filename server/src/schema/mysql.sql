@@ -90,13 +90,25 @@ CREATE TABLE IF NOT EXISTS books (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图书';
 
 -- 群聊消息表
+-- 群聊分组
+CREATE TABLE IF NOT EXISTS chat_groups (
+    id            BIGINT       PRIMARY KEY COMMENT '群编号',
+    name          VARCHAR(64)  NOT NULL COMMENT '群名称',
+    description   VARCHAR(255) DEFAULT '' COMMENT '群说明',
+    sort_order    INT          DEFAULT 0,
+    status        TINYINT      DEFAULT 1 COMMENT '1启用 0停用',
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊分组';
+
 CREATE TABLE IF NOT EXISTS chat_messages (
     id         BIGINT      PRIMARY KEY AUTO_INCREMENT,
+    group_id   BIGINT      NOT NULL DEFAULT 1 COMMENT '所属群',
     user_id    BIGINT      NOT NULL,
     type       TINYINT     DEFAULT 1 COMMENT '1文字 2图片',
     content    TEXT        COMMENT '文字内容或图片URL',
     created_at DATETIME    DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_created_at (created_at DESC)
+    INDEX idx_created_at (created_at DESC),
+    INDEX idx_chat_group (group_id, id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊消息';
 
 -- 提案（群聊右侧功能栏）
@@ -111,15 +123,6 @@ CREATE TABLE IF NOT EXISTS proposals (
     INDEX idx_proposals_created (created_at DESC),
     INDEX idx_proposals_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提案';
-
--- 群聊 @所有人 每周使用记录
-CREATE TABLE IF NOT EXISTS chat_at_all_usage (
-    id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
-    user_id       BIGINT       NOT NULL,
-    week_key      VARCHAR(10)  NOT NULL,
-    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_at_all_user_week (user_id, week_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊 @所有人 使用记录';
 
 -- 组织（如 001）
 CREATE TABLE IF NOT EXISTS organizations (

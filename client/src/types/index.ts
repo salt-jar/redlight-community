@@ -62,8 +62,16 @@ export interface Book {
   uploader?: PostAuthor;
 }
 
+export interface ChatGroup {
+  id: number;
+  name: string;
+  description: string;
+  sortOrder: number;
+}
+
 export interface ChatMessage {
   id: number;
+  groupId?: number;
   type: 1 | 2;
   content: string;
   createdAt: string;

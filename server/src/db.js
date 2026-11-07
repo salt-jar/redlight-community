@@ -26,6 +26,7 @@ async function createSqliteDb(config) {
   sqlite.exec(fs.readFileSync(path.join(SCHEMA_DIR, 'sqlite.sql'), 'utf8'));
   ensureSqliteUserIdentity(sqlite);
   ensureSqliteStatusColumns(sqlite);
+  ensureSqliteChatGroups(sqlite);
 
   const normalize = (params = []) =>
     params.map((value) => {
@@ -112,6 +113,14 @@ function ensureSqliteStatusColumns(sqlite) {
     sqlite.exec('ALTER TABLE posts ADD COLUMN status INTEGER DEFAULT 1');
   }
   sqlite.exec('CREATE INDEX IF NOT EXISTS idx_posts_status_id ON posts(status, id)');
+}
+
+function ensureSqliteChatGroups(sqlite) {
+  const columns = new Set(sqlite.prepare("PRAGMA table_info('chat_messages')").all().map((column) => column.name));
+  if (!columns.has('group_id')) {
+    sqlite.exec('ALTER TABLE chat_messages ADD COLUMN group_id INTEGER NOT NULL DEFAULT 1');
+  }
+  sqlite.exec('CREATE INDEX IF NOT EXISTS idx_chat_group ON chat_messages(group_id, id)');
 }
 
 async function createMysqlDb(config) {  const mysql = await import('mysql2/promise');

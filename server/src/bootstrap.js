@@ -18,6 +18,7 @@ export async function createDeps(config = loadConfig()) {
   const online = createOnlineRegistry();
   await ensureDefaultOrganization(db);
   await ensureBootstrapOrgAdmin(db, config);
+  await ensureDefaultChatGroups(db);
   return { config, db, cache, mailer, online };
 }
 
@@ -32,6 +33,25 @@ async function ensureDefaultOrganization(db) {
     await db.query(
       "INSERT INTO system_settings (setting_key, value) VALUES ('org.001.gate_password', 'SQL')",
     );
+  }
+}
+
+/** 默认群聊分组；已有数据不会覆盖 */
+async function ensureDefaultChatGroups(db) {
+  const groups = [
+    { id: 1, name: '赤光总群', description: '全站同志交流与公告', sortOrder: 1 },
+    { id: 2, name: '理论学习', description: '经典著作与理论学习讨论', sortOrder: 2 },
+    { id: 3, name: '文献研究', description: '文献整理、版本与阅读心得', sortOrder: 3 },
+    { id: 4, name: '青年同志', description: '青年学习与实践活动', sortOrder: 4 },
+  ];
+  for (const group of groups) {
+    const rows = await db.query('SELECT id FROM chat_groups WHERE id = ? LIMIT 1', [group.id]);
+    if (!rows.length) {
+      await db.query(
+        'INSERT INTO chat_groups (id, name, description, sort_order) VALUES (?, ?, ?, ?)',
+        [group.id, group.name, group.description, group.sortOrder],
+      );
+    }
   }
 }
 

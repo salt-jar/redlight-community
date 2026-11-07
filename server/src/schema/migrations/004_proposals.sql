@@ -12,11 +12,3 @@ CREATE TABLE IF NOT EXISTS proposals (
     INDEX idx_proposals_created (created_at DESC),
     INDEX idx_proposals_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='提案';
-
-CREATE TABLE IF NOT EXISTS chat_at_all_usage (
-    id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
-    user_id       BIGINT       NOT NULL,
-    week_key      VARCHAR(10)  NOT NULL,
-    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_at_all_user_week (user_id, week_key)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊 @所有人 使用记录';

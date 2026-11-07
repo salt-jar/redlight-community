@@ -545,20 +545,41 @@ async function main() {
   await waitForText(page.locator('[data-testid="chat-messages"]'), '同志们好，这是 E2E 自动化测试消息。');
   await shot(page, 'chat');
 
-  log('检查 @所有人 额度与提案面板...');
-  await waitForText(page.locator('[data-testid="chat-at-all"]'), '/3');
-  await page.click('[data-testid="chat-at-all"]');
-  assert((await page.inputValue('[data-testid="chat-input"]')).includes('@所有人'), '@所有人按钮应插入提及');
-  await page.click('[data-testid="chat-send"]');
-  await waitForText(page.locator('[data-testid="chat-messages"]'), '@所有人');
-  await waitForText(page.locator('[data-testid="chat-at-all"]'), '2/3');
-  const baseChatWidth = await page.locator('.chat-main-column').evaluate((element) => element.getBoundingClientRect().width);
-  await page.click('[data-testid="proposal-option"]');
+  log('检查四栏无间隙布局、群列表与提案面板...');
+  const chatLayout = await page.evaluate(() => {
+    const rect = (selector) => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const box = element.getBoundingClientRect();
+      return { left: box.left, right: box.right, width: box.width, top: box.top, bottom: box.bottom };
+    };
+    return {
+      nav: rect('.side-nav'),
+      group: rect('.group-column'),
+      chat: rect('.chat-column'),
+      panel: rect('.function-panel'),
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+      viewportWidth: window.innerWidth,
+    };
+  });
+  assert(chatLayout.nav && chatLayout.group && chatLayout.chat && chatLayout.panel, '四栏布局应全部渲染');
+  assert(chatLayout.nav.left <= 1, `全局导航应紧贴左侧，实际 left=${chatLayout.nav.left}`);
+  assert(Math.abs(chatLayout.nav.right - chatLayout.group.left) <= 1, '全局导航与群列表之间不能有间隙');
+  assert(Math.abs(chatLayout.group.right - chatLayout.chat.left) <= 1, '群列表与聊天主区间不能有间隙');
+  assert(Math.abs(chatLayout.chat.right - chatLayout.panel.left) <= 1, '聊天主区与功能面板间不能有间隙');
+  assert(Math.abs(chatLayout.panel.right - chatLayout.viewportWidth) <= 1, '功能面板应贴住页面最右侧');
+  assert(Math.abs(chatLayout.chat.width / chatLayout.panel.width - 3) < 0.08, `功能面板应为主聊天区的 1/3：${chatLayout.chat.width}/${chatLayout.panel.width}`);
+  assert(chatLayout.overflow <= 1, `群聊四栏不应横向溢出：${chatLayout.overflow}px`);
+  assert((await page.locator('[data-testid="chat-group-list"] .group-item').count()) >= 4, '群列表应展示全部群聊');
+  assert((await page.locator('[data-testid="chat-at-all"]').count()) === 0, '@所有人功能应已删除');
+  assert(await page.locator('[data-testid="proposal-option"]').evaluate((el) => el.classList.contains('active')), '提案标签应默认激活');
   await waitForTestId(page, 'proposal-panel');
   await waitForTestId(page, 'proposal-title');
-  const openChatWidth = await page.locator('.chat-main-column').evaluate((element) => element.getBoundingClientRect().width);
-  assert(openChatWidth < baseChatWidth, `打开提案面板后主聊天区应变窄：${baseChatWidth} -> ${openChatWidth}`);
-  assert(await page.locator('[data-testid="chat-rail"]').isVisible(), '右侧功能栏应保持可见');
+
+  await page.click('[data-group-id="2"]');
+  await waitForText(page.locator('.chat-title'), '理论学习');
+  await page.click('[data-group-id="1"]');
+  await waitForText(page.locator('.chat-title'), '赤光总群');
 
   const proposalTitle = '关于每周学习安排的 E2E 提案';
   await fillTestId(page, 'proposal-title', proposalTitle);
@@ -571,8 +592,12 @@ async function main() {
   await page.click('[data-testid="proposal-submit"]');
   const proposalResult = await proposalResponse;
   assert(proposalResult.status() === 201, `创建提案应成功，实际 ${proposalResult.status()}`);
-  await waitForText(page.locator('[data-testid="proposal-mini-list"]'), proposalTitle);
   await waitForText(page.locator('[data-testid="proposal-panel"]'), proposalTitle);
+  await waitForText(page.locator('[data-testid="proposal-mini"]'), proposalTitle);
+  assert(
+    (await page.locator('.proposal-list').evaluate((el) => getComputedStyle(el).flexDirection)) === 'column',
+    '提案列表应为竖向单列',
+  );
 
   const secondLogin = await apiLogin(`e2e-peer${Date.now()}@example.com`);
   const context2 = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'zh-CN' });
@@ -797,7 +822,7 @@ async function main() {
   await waitForTestId(page, 'chat-input');
   await page.click('[data-testid="proposal-option"]');
   await waitForTestId(page, 'proposal-panel');
-  await waitForText(page.locator('[data-testid="proposal-mini-list"]'), '关于每周学习安排的 E2E 提案');
+  await waitForText(page.locator('[data-testid="proposal-mini"]'), '关于每周学习安排的 E2E 提案');
   await sleep(300);
   await shot(page, 'proposals');
 

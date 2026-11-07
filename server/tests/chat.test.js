@@ -121,39 +121,40 @@ describe('Socket.IO 群聊', () => {
     expect((await typeError).msg).toContain('类型');
   });
 
-  it('@所有人 每位成员每周最多 3 次', async () => {
-    const initial = await ctx.agent
-      .get('/api/chat/at-all')
+  it('群列表可切换，不同群的消息互相隔离', async () => {
+    const groups = await ctx.agent
+      .get('/api/chat/groups')
       .set('Authorization', `Bearer ${alice.token}`);
-    expect(initial.status).toBe(200);
-    expect(initial.body).toMatchObject({ limit: 3, used: 0, remaining: 3 });
+    expect(groups.status).toBe(200);
+    expect(groups.body.list.map((group) => group.name)).toEqual(['赤光总群', '理论学习', '文献研究', '青年同志']);
 
-    const socket = connect(alice.token);
-    await waitForConnection(socket);
+    const aliceSocket = connect(alice.token);
+    const bobSocket = connect(bob.token);
+    await waitForConnection(aliceSocket);
+    await waitForConnection(bobSocket);
 
-    for (let index = 0; index < 3; index += 1) {
-      const ack = new Promise((resolve) => {
-        socket.emit('chat:send', { type: 1, content: `@所有人 第 ${index + 1} 次通知` }, resolve);
-      });
-      const received = waitForEvent(socket, 'chat:message');
-      const result = await ack;
-      expect(result).toMatchObject({ ok: true, atAllUsed: true, atAllRemaining: 2 - index });
-      expect((await received).content).toContain('@所有人');
-    }
+    const joinAck = await new Promise((resolve) => {
+      aliceSocket.emit('chat:join', { groupId: 2 }, resolve);
+    });
+    expect(joinAck).toMatchObject({ ok: true, groupId: 2 });
 
-    const usage = await ctx.agent
-      .get('/api/chat/at-all')
-      .set('Authorization', `Bearer ${alice.token}`);
-    expect(usage.body).toMatchObject({ used: 3, remaining: 0 });
+    let bobReceived = false;
+    bobSocket.once('chat:message', () => {
+      bobReceived = true;
+    });
+    const received = waitForEvent(aliceSocket, 'chat:message');
+    const sendAck = new Promise((resolve) => {
+      aliceSocket.emit('chat:send', { type: 1, content: '理论学习群消息', groupId: 2 }, resolve);
+    });
+    expect(await sendAck).toMatchObject({ ok: true, groupId: 2 });
+    expect((await received).content).toBe('理论学习群消息');
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(bobReceived).toBe(false);
 
-    const blocked = waitForEvent(socket, 'chat:error');
-    socket.emit('chat:send', { type: 1, content: '@所有人 第四次通知' });
-    expect((await blocked).msg).toContain('每周最多');
-
-    const bobUsage = await ctx.agent
-      .get('/api/chat/at-all')
-      .set('Authorization', `Bearer ${bob.token}`);
-    expect(bobUsage.body.remaining).toBe(3);
+    const group2History = await ctx.agent.get('/api/chat/history?limit=20&groupId=2');
+    expect(group2History.body.list.some((item) => item.content === '理论学习群消息')).toBe(true);
+    const group1History = await ctx.agent.get('/api/chat/history?limit=20&groupId=1');
+    expect(group1History.body.list.some((item) => item.content === '理论学习群消息')).toBe(false);
   });
 
   it('历史消息最近 50 条、上滑 beforeId 分页且保持正序', async () => {

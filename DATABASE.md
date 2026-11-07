@@ -69,8 +69,9 @@ WHERE username = 'redstar_2026';
 | `organization_admins` | 组织管理员账号、scrypt 密码哈希、随机盐、启用状态、最后登录时间 |
 | `system_settings` | 系统设置；`org.001.gate_password` 是 001 组织第一级系统密码，默认 `SQL` |
 | `reports` | 举报记录：`target_type`（post / book）、`target_id`、原因、补充说明、处理状态与处理动作 |
+| `chat_groups` | 群聊分组：赤光总群、理论学习、文献研究、青年同志；控制群名称和顺序 |
+| `chat_messages.group_id` | 消息所属群，群聊记录按群隔离 |
 | `proposals` | 群聊提案：标题、提案时间、发起人信息、正文、发起用户 |
-| `chat_at_all_usage` | 群聊 @所有人 每周额度记录：`user_id` + `week_key`（周一日期） |
 | `posts.status` | `1` 正常、`0` 已下架 |
 | `books.status` | `1` 正常、`0` 已下架 |
 
@@ -100,16 +101,18 @@ SELECT id, uploader_id, title, status FROM books WHERE status = 0;
 -- 查看被封锁用户
 SELECT id, nickname, username, community_no, email FROM users WHERE status = 0;
 
+-- 查看群分组
+SELECT id, name, description, sort_order FROM chat_groups WHERE status = 1 ORDER BY sort_order, id;
+
+-- 查看各群消息数量
+SELECT g.name, COUNT(m.id) AS total
+FROM chat_groups g LEFT JOIN chat_messages m ON m.group_id = g.id
+GROUP BY g.id, g.name ORDER BY g.sort_order;
+
 -- 查看提案
 SELECT p.id, p.title, p.proposal_time, p.proposer_info, u.nickname, p.created_at
 FROM proposals p JOIN users u ON u.id = p.user_id
 ORDER BY p.id DESC;
-
--- 查看本周 @所有人 使用情况（week_key 为周一日期）
-SELECT user_id, COUNT(*) AS used
-FROM chat_at_all_usage
-WHERE week_key = '2026-11-02'
-GROUP BY user_id;
 ```
 
 ### 可读视图 `login_log_details`

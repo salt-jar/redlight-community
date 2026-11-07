@@ -21,7 +21,6 @@ function openPreview(src: string) {
     <div class="msg-body">
       <div class="msg-meta">
         <span class="msg-name">{{ message.user.nickname }}</span>
-        <span v-if="message.type === 1 && message.content.includes('@所有人')" class="at-all-mark">@所有人</span>
         <span class="msg-time">{{ formatChatTime(message.createdAt) }}</span>
       </div>
       <div v-if="message.type === 2" class="msg-bubble image-bubble">
@@ -74,15 +73,6 @@ function openPreview(src: string) {
 
 .msg-name {
   font-size: 11px;
-}
-
-.at-all-mark {
-  padding: 0 5px;
-  border-radius: 3px;
-  background: #fff1f0;
-  color: var(--rl-primary);
-  font-size: 9px;
-  line-height: 15px;
 }
 
 .msg-bubble {

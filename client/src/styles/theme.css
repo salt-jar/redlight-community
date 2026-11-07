@@ -132,6 +132,51 @@ p {
   max-width: var(--rl-page-secondary);
 }
 
+/* 全宽四栏页面（群聊）：导航贴最左，内容撑满，无外层 margin */
+.app-body.full-bleed.no-right {
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  max-width: none;
+  padding: 0;
+  justify-content: stretch;
+  align-items: stretch;
+}
+
+.app-body.full-bleed.no-right .side-nav {
+  width: 200px;
+  height: calc(100vh - 56px);
+  min-height: calc(100vh - 56px);
+  align-self: stretch;
+  overflow-y: auto;
+  padding: 14px 8px;
+  border-right: 1px solid var(--rl-border);
+  background: #fff;
+}
+
+.app-body.full-bleed.no-right .app-main {
+  max-width: none;
+  margin: 0;
+}
+
+@media (max-width: 1199px) {
+  .app-body.full-bleed.no-right {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .app-body.full-bleed.no-right .side-nav {
+    width: 72px;
+    padding: 14px 4px;
+  }
+}
+
+@media (max-width: 767px) {
+  .app-body.full-bleed.no-right {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+  }
+}
+
 .side-nav {
   width: 200px;
   position: sticky;
