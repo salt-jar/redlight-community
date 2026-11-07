@@ -156,7 +156,8 @@ onMounted(load);
 .detail-card {
   display: flex;
   gap: 28px;
-  padding: 24px;
+  padding: var(--rl-page-padding, 26px);
+  border: 1px solid var(--rl-border);
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--rl-shadow);
@@ -292,7 +293,8 @@ onMounted(load);
 
 .description-card {
   margin-top: 12px;
-  padding: 20px 24px;
+  padding: var(--rl-page-padding, 26px);
+  border: 1px solid var(--rl-border);
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--rl-shadow);

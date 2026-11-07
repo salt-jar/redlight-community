@@ -394,6 +394,18 @@ async function main() {
   assert(uploaded.status() === 200, `图书上传应成功：${JSON.stringify(uploadedBody)}`);
   await page.waitForURL(/\/books\/\d+$/, { timeout: 30000 });
   await page.waitForSelector('[data-testid="book-title"]');
+  const secondaryFrame = await page.evaluate(() => {
+    const main = document.querySelector('.app-main');
+    const card = document.querySelector('.detail-card');
+    return {
+      width: main?.getBoundingClientRect().width || 0,
+      padding: card ? parseFloat(getComputedStyle(card).paddingLeft) : 0,
+      overflow: document.documentElement.scrollWidth - window.innerWidth,
+    };
+  });
+  assert(secondaryFrame.width >= 1000, `1280px 二级页面内容宽度应不小于 1000px，实际 ${secondaryFrame.width}`);
+  assert(secondaryFrame.padding >= 24, `二级页面卡片内边距应不小于 24px，实际 ${secondaryFrame.padding}`);
+  assert(secondaryFrame.overflow <= 1, `二级页面不应横向溢出，溢出 ${secondaryFrame.overflow}px`);
   assert((await page.locator('[data-testid="book-title"]').textContent()).includes('共产党宣言'), '详情页应展示书名');
   await waitFor(
     async () =>
@@ -611,7 +623,17 @@ async function main() {
   assert(medium.overflow <= 1, `900px 不应横向溢出，溢出 ${medium.overflow}px`);
   await shot(page, 'responsive-900');
 
+  await page.goto(`${webBase}/books/${uploadedBody.book.id}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="book-title"]');
+  const secondaryAt900 = await page.evaluate(() => ({
+    width: document.querySelector('.app-main')?.getBoundingClientRect().width || 0,
+    overflow: document.documentElement.scrollWidth - window.innerWidth,
+  }));
+  assert(secondaryAt900.width >= 760, `900px 二级页面内容宽度应不小于 760px，实际 ${secondaryAt900.width}`);
+  assert(secondaryAt900.overflow <= 1, `900px 二级页面不应横向溢出，溢出 ${secondaryAt900.overflow}px`);
+
   log('检查 375px 单栏 + 底部 Tab...');
+  await page.goto(webBase, { waitUntil: 'networkidle' });
   await page.setViewportSize({ width: 375, height: 812 });
   await sleep(300);
   const narrow = await measureLayout(page);

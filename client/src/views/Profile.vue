@@ -216,7 +216,7 @@ watch(
   display: flex;
   align-items: center;
   gap: 20px;
-  padding: 24px;
+  padding: var(--rl-page-padding, 26px);
 }
 
 .profile-info {

@@ -236,7 +236,8 @@ watch(
   display: flex;
   gap: 8px;
   margin-top: 12px;
-  padding: 10px 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--rl-border-light);
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--rl-shadow);
@@ -321,7 +322,7 @@ watch(
 
 .user-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   margin-top: 12px;
 }
@@ -330,8 +331,8 @@ watch(
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--rl-border-light);
+  padding: 16px;
+  border: 1px solid var(--rl-border);
   border-radius: 8px;
   background: #fff;
   box-shadow: var(--rl-shadow);

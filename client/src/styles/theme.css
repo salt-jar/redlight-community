@@ -16,6 +16,10 @@
   --rl-radius-btn: 6px;
   --rl-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
   --rl-shadow-hover: 0 6px 20px rgba(80, 40, 20, 0.1);
+  /* 二级页面统一布局：宽内容区 + 统一内边距，避免各页面自行收窄 */
+  --rl-page-secondary: 1080px;
+  --rl-page-padding: 26px;
+  --rl-page-gap: 20px;
   --rl-serif: 'Noto Serif SC', 'Source Han Serif SC', 'Songti SC', STSong, SimSun, serif;
   --rl-sans: 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial,
     sans-serif;
@@ -111,7 +115,9 @@ p {
 }
 
 .app-body.no-right {
-  grid-template-columns: 200px minmax(0, 960px);
+  grid-template-columns: 200px minmax(0, var(--rl-page-secondary));
+  gap: var(--rl-page-gap);
+  max-width: 1360px;
   justify-content: center;
 }
 
@@ -123,7 +129,7 @@ p {
 }
 
 .app-body.no-right .app-main {
-  max-width: 960px;
+  max-width: var(--rl-page-secondary);
 }
 
 .side-nav {
@@ -146,9 +152,10 @@ p {
 
 .page-card {
   background: var(--rl-card);
+  border: 1px solid var(--rl-border);
   border-radius: var(--rl-radius-card);
   box-shadow: var(--rl-shadow);
-  padding: 20px;
+  padding: var(--rl-page-padding, 26px);
 }
 
 .page-title {
@@ -363,8 +370,15 @@ p {
     justify-content: center;
   }
 
+  /* 二级页面不再被强行压到 680px，占满可用宽度 */
+  .app-body.no-right {
+    grid-template-columns: 72px minmax(0, var(--rl-page-secondary));
+    gap: var(--rl-page-gap);
+    max-width: none;
+  }
+
   .app-body.no-right .app-main {
-    max-width: 680px;
+    max-width: var(--rl-page-secondary);
   }
 
   .side-nav {
