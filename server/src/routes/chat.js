@@ -13,7 +13,7 @@ export function createChatRouter({ db }) {
       const rawBefore = Number(req.query.beforeId);
       const beforeId = Number.isSafeInteger(rawBefore) && rawBefore > 0 ? rawBefore : 0;
 
-      const where = beforeId ? 'WHERE m.id < ?' : '';
+      const where = beforeId ? 'WHERE m.id < ? AND u.status = 1' : 'WHERE u.status = 1';
       const params = beforeId ? [beforeId, limit + 1] : [limit + 1];
       const rows = await db.query(
         `SELECT m.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url
