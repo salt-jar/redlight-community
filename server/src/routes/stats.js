@@ -28,7 +28,7 @@ export function createStatsRouter({ db, cache, online }) {
           // 缓存损坏时重建
         }
       }
-      const rows = await db.query('SELECT content FROM posts ORDER BY id DESC LIMIT 500');
+      const rows = await db.query('SELECT content FROM posts WHERE status = 1 ORDER BY id DESC LIMIT 500');
       const counts = new Map();
       for (const row of rows) {
         for (const topic of extractTopics(row.content)) {
@@ -49,9 +49,9 @@ export function createStatsRouter({ db, cache, online }) {
     asyncHandler(async (_req, res) => {
       const today = db.driver === 'mysql' ? 'DATE(created_at) = CURDATE()' : "date(created_at, 'localtime') = date('now', 'localtime')";
       const [users, todayNewUsers, todayPosts, books] = await Promise.all([
-        db.query('SELECT COUNT(*) AS total FROM users'),
-        db.query(`SELECT COUNT(*) AS total FROM users WHERE ${today}`),
-        db.query(`SELECT COUNT(*) AS total FROM posts WHERE ${today}`),
+        db.query('SELECT COUNT(*) AS total FROM users WHERE status = 1'),
+        db.query(`SELECT COUNT(*) AS total FROM users WHERE status = 1 AND ${today}`),
+        db.query(`SELECT COUNT(*) AS total FROM posts WHERE status = 1 AND ${today}`),
         db.query('SELECT COUNT(*) AS total FROM books WHERE status = 1'),
       ]);
       res.json({

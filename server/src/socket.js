@@ -22,8 +22,9 @@ export function createSocket(httpServer, { db, config, online, logger = console 
     try {
       const payload = jwt.verify(token, config.jwtSecret);
       if (!payload?.userId) return next(new Error('未授权'));
-      const rows = await db.query('SELECT id, nickname, avatar_url, bio FROM users WHERE id = ? LIMIT 1', [payload.userId]);
+      const rows = await db.query('SELECT id, nickname, avatar_url, bio, status FROM users WHERE id = ? LIMIT 1', [payload.userId]);
       if (!rows.length) return next(new Error('未授权'));
+      if (Number(rows[0].status) === 0) return next(new Error('账号已被封禁'));
       socket.data.user = serializePublicUser(rows[0]);
       return next();
     } catch {
@@ -43,6 +44,12 @@ export function createSocket(httpServer, { db, config, online, logger = console 
 
     socket.on('chat:send', async (data, ack) => {
       try {
+        const statusRows = await db.query('SELECT status FROM users WHERE id = ? LIMIT 1', [Number(user.id)]);
+        if (!statusRows.length || Number(statusRows[0].status) === 0) {
+          socket.emit('chat:error', { msg: '账号已被封禁' });
+          socket.disconnect(true);
+          return;
+        }
         const rawType = Number(data?.type);
         if (rawType !== 1 && rawType !== 2) throw new Error('消息类型不正确');
         const type = rawType;

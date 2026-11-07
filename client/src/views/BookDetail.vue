@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { ArrowLeftOutlined, DownloadOutlined, ReadOutlined } from '@ant-design/icons-vue';
+import { ArrowLeftOutlined, DownloadOutlined, FlagOutlined, ReadOutlined } from '@ant-design/icons-vue';
 import AppShell from '@/components/layout/AppShell.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
+import ReportDialog from '@/components/common/ReportDialog.vue';
 import { apiGetBook, bookDownloadUrl } from '@/api/books';
 import { apiErrorMessage } from '@/api/http';
 import type { Book } from '@/types';
@@ -13,6 +14,7 @@ const route = useRoute();
 const router = useRouter();
 const book = ref<Book | null>(null);
 const loading = ref(true);
+const reportOpen = ref(false);
 const error = ref('');
 
 async function load() {
@@ -97,6 +99,10 @@ onMounted(load);
               <DownloadOutlined />
               下载本书
             </a>
+            <button class="download-btn report-btn" type="button" data-testid="report-book" @click="reportOpen = true">
+              <FlagOutlined />
+              举报
+            </button>
           </div>
 
           <p class="copyright-note">
@@ -104,6 +110,14 @@ onMounted(load);
           </p>
         </div>
       </article>
+
+      <ReportDialog
+        v-if="book"
+        v-model:open="reportOpen"
+        target-type="book"
+        :target-id="book.id"
+        :target-title="book.title"
+      />
 
       <section class="description-card">
         <h3 class="section-title">内容简介</h3>
@@ -239,6 +253,7 @@ onMounted(load);
   padding: 0 20px;
   border-radius: 6px;
   font-size: 14px;
+  font-family: inherit;
   cursor: pointer;
 }
 
@@ -256,6 +271,11 @@ onMounted(load);
   border: 1px solid var(--rl-border);
   background: #fff;
   color: var(--rl-text-tertiary);
+}
+
+.report-btn:hover {
+  border-color: var(--rl-primary);
+  color: var(--rl-primary);
 }
 
 .download-btn:hover {

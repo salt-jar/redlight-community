@@ -12,6 +12,7 @@ import { message } from 'ant-design-vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import PostImageGrid from './PostImageGrid.vue';
 import CommentList from './CommentList.vue';
+import ReportDialog from '@/components/common/ReportDialog.vue';
 import { apiLikePost, apiRepost } from '@/api/posts';
 import { apiErrorMessage } from '@/api/http';
 import type { Post } from '@/types';
@@ -29,6 +30,7 @@ const commentCount = ref(props.post.commentCount);
 const likePending = ref(false);
 const commentsOpen = ref(false);
 const repostOpen = ref(false);
+const reportOpen = ref(false);
 const repostText = ref('');
 const reposting = ref(false);
 const repostError = ref('');
@@ -86,7 +88,7 @@ async function submitRepost() {
 
 function onMoreClick(info: { key: string | number }) {
   const key = String(info.key);
-  if (key === 'report') message.info('已收到举报，我们会尽快处理');
+  if (key === 'report') reportOpen.value = true;
   else if (key === 'uninterested') message.info('将减少展示此类内容');
   else if (key === 'favorite') message.info('已收藏（演示功能）');
 }
@@ -205,6 +207,13 @@ function goProfile(userId: number) {
         <p class="preview-content">{{ post.content }}</p>
       </div>
     </a-modal>
+
+    <ReportDialog
+      v-model:open="reportOpen"
+      target-type="post"
+      :target-id="post.id"
+      :target-title="post.content.slice(0, 50) || `动态 #${post.id}`"
+    />
   </article>
 </template>
 

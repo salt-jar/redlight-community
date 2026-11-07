@@ -88,6 +88,9 @@ export function loadConfig(env = process.env) {
     redisUrl: stringValue(env, 'REDIS_URL', ''),
     jwtSecret: stringValue(env, 'JWT_SECRET', 'redlight-dev-secret-please-change'),
     jwtExpiresIn: stringValue(env, 'JWT_EXPIRES_IN', '7d'),
+    adminGatePassword: stringValue(env, 'ADMIN_GATE_PASSWORD', 'redlight-admin-gate'),
+    adminTokenExpiresIn: stringValue(env, 'ADMIN_TOKEN_EXPIRES_IN', '2h'),
+    adminBootstrapPassword: stringValue(env, 'ADMIN_BOOTSTRAP_PASSWORD', ''),
     smtp: {
       enabled: Boolean(smtpHost && smtpUser && smtpPass),
       host: smtpHost,

@@ -12,6 +12,7 @@
     "test:server": "npm --prefix server test",
     "test:client": "npm --prefix client test",
     "logins": "node server/scripts/show-logins.mjs",
+    "admin:create": "node server/scripts/create-admin.mjs",
     "e2e": "npm --prefix e2e test"
   },
   "engines": {

@@ -1,5 +1,5 @@
 {
-  "email": "e2e1793965765840@example.com",
+  "email": "e2e1794018270164@example.com",
   "nickname": "同志_e2e179",
   "screenshots": [
     "01-login.png",
@@ -16,7 +16,9 @@
     "12-profile-updated.png",
     "13-responsive-900.png",
     "14-responsive-375.png",
-    "15-mobile-search.png"
+    "15-mobile-search.png",
+    "16-admin-dashboard.png",
+    "17-admin-report-handled.png"
   ],
   "consoleErrors": [],
   "pageErrors": []

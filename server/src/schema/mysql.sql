@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url    VARCHAR(512) DEFAULT '' COMMENT '头像',
     bio           VARCHAR(255) DEFAULT '' COMMENT '个人简介',
     role          TINYINT      DEFAULT 0 COMMENT '0普通用户 1管理员',
+    status        TINYINT      DEFAULT 1 COMMENT '1正常 0封禁',
     created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
     updated_at    DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_nickname (nickname)
@@ -41,9 +42,11 @@ CREATE TABLE IF NOT EXISTS posts (
     repost_id     BIGINT       NULL COMMENT '转发引用的原帖ID',
     like_count    INT          DEFAULT 0,
     comment_count INT          DEFAULT 0,
+    status        TINYINT      DEFAULT 1 COMMENT '1正常 0已下架',
     created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_user_id (user_id),
     INDEX idx_created_at (created_at DESC),
+    INDEX idx_status_id (status, id),
     INDEX idx_repost_id (repost_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='文章/帖子';
 
@@ -95,6 +98,48 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at DATETIME    DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_created_at (created_at DESC)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='群聊消息';
+
+-- 门店（管理后台租户）
+CREATE TABLE IF NOT EXISTS stores (
+    id            BIGINT       PRIMARY KEY COMMENT '门店编号，如 1001',
+    name          VARCHAR(64)  NOT NULL COMMENT '门店名称',
+    status        TINYINT      DEFAULT 1 COMMENT '1启用 0停用',
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='门店';
+
+-- 门店管理员（二级个人密码）
+CREATE TABLE IF NOT EXISTS store_admins (
+    id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+    store_id      BIGINT       NOT NULL,
+    username      VARCHAR(32)  NOT NULL COMMENT '管理员登录账号',
+    password_hash VARCHAR(128) NOT NULL COMMENT 'scrypt 哈希',
+    password_salt VARCHAR(64)  NOT NULL,
+    display_name  VARCHAR(64)  DEFAULT '' COMMENT '显示名称',
+    role          TINYINT      DEFAULT 1,
+    status        TINYINT      DEFAULT 1 COMMENT '1启用 0停用',
+    last_login_at DATETIME     NULL,
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_store_admin (store_id, username),
+    INDEX idx_store_admins_store (store_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='门店管理员';
+
+-- 举报（全站队列）
+CREATE TABLE IF NOT EXISTS reports (
+    id            BIGINT       PRIMARY KEY AUTO_INCREMENT,
+    reporter_id   BIGINT       NOT NULL,
+    target_type   VARCHAR(16)  NOT NULL COMMENT 'post / book',
+    target_id     BIGINT       NOT NULL,
+    reason        VARCHAR(64)  NOT NULL,
+    detail        VARCHAR(500) DEFAULT '',
+    status        TINYINT      DEFAULT 0 COMMENT '0待处理 1已处理 2已忽略',
+    action        VARCHAR(32)  DEFAULT '',
+    handled_by    BIGINT       NULL,
+    handled_at    DATETIME     NULL,
+    created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_reports_status (status, created_at DESC),
+    INDEX idx_reports_target (target_type, target_id),
+    INDEX idx_reports_reporter (reporter_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='举报';
 
 -- 登录明细视图：关联用户昵称，输出可读状态与本地时间（数据库时区即本地时区）
 CREATE OR REPLACE VIEW login_log_details AS

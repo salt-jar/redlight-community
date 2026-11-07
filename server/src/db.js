@@ -25,6 +25,7 @@ async function createSqliteDb(config) {
   sqlite.pragma('foreign_keys = ON');
   sqlite.exec(fs.readFileSync(path.join(SCHEMA_DIR, 'sqlite.sql'), 'utf8'));
   ensureSqliteUserIdentity(sqlite);
+  ensureSqliteStatusColumns(sqlite);
 
   const normalize = (params = []) =>
     params.map((value) => {
@@ -99,6 +100,18 @@ function ensureSqliteUserIdentity(sqlite) {
 
   sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS uk_users_username ON users(username)');
   sqlite.exec('CREATE UNIQUE INDEX IF NOT EXISTS uk_users_community_no ON users(community_no)');
+}
+
+function ensureSqliteStatusColumns(sqlite) {
+  const userColumns = new Set(sqlite.prepare("PRAGMA table_info('users')").all().map((column) => column.name));
+  if (!userColumns.has('status')) {
+    sqlite.exec('ALTER TABLE users ADD COLUMN status INTEGER DEFAULT 1');
+  }
+  const postColumns = new Set(sqlite.prepare("PRAGMA table_info('posts')").all().map((column) => column.name));
+  if (!postColumns.has('status')) {
+    sqlite.exec('ALTER TABLE posts ADD COLUMN status INTEGER DEFAULT 1');
+  }
+  sqlite.exec('CREATE INDEX IF NOT EXISTS idx_posts_status_id ON posts(status, id)');
 }
 
 async function createMysqlDb(config) {  const mysql = await import('mysql2/promise');

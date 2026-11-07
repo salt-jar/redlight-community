@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS users (
     avatar_url    TEXT    DEFAULT '',
     bio           TEXT    DEFAULT '',
     role          INTEGER DEFAULT 0,
+    status        INTEGER DEFAULT 1,
     created_at    TEXT    DEFAULT CURRENT_TIMESTAMP,
     updated_at    TEXT    DEFAULT CURRENT_TIMESTAMP
 );
@@ -36,6 +37,7 @@ CREATE TABLE IF NOT EXISTS posts (
     repost_id     INTEGER NULL,
     like_count    INTEGER DEFAULT 0,
     comment_count INTEGER DEFAULT 0,
+    status        INTEGER DEFAULT 1,
     created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
@@ -85,6 +87,48 @@ CREATE TABLE IF NOT EXISTS chat_messages (
     created_at TEXT    DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at DESC);
+
+-- 门店（管理后台租户）
+CREATE TABLE IF NOT EXISTS stores (
+    id            INTEGER PRIMARY KEY,
+    name          TEXT    NOT NULL,
+    status        INTEGER DEFAULT 1,
+    created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 门店管理员（二级个人密码）
+CREATE TABLE IF NOT EXISTS store_admins (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    store_id      INTEGER NOT NULL,
+    username      TEXT    NOT NULL,
+    password_hash TEXT    NOT NULL,
+    password_salt TEXT    NOT NULL,
+    display_name  TEXT    DEFAULT '',
+    role          INTEGER DEFAULT 1,
+    status        INTEGER DEFAULT 1,
+    last_login_at TEXT    NULL,
+    created_at    TEXT    DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (store_id, username)
+);
+CREATE INDEX IF NOT EXISTS idx_store_admins_store ON store_admins(store_id);
+
+-- 举报（全站队列）
+CREATE TABLE IF NOT EXISTS reports (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id   INTEGER NOT NULL,
+    target_type   TEXT    NOT NULL,
+    target_id     INTEGER NOT NULL,
+    reason        TEXT    NOT NULL,
+    detail        TEXT    DEFAULT '',
+    status        INTEGER DEFAULT 0,
+    action        TEXT    DEFAULT '',
+    handled_by    INTEGER NULL,
+    handled_at    TEXT    NULL,
+    created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_reports_target ON reports(target_type, target_id);
+CREATE INDEX IF NOT EXISTS idx_reports_reporter ON reports(reporter_id);
 
 CREATE TRIGGER IF NOT EXISTS trg_users_updated_at
 AFTER UPDATE ON users

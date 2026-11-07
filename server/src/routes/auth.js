@@ -48,13 +48,16 @@ export function createAuthRouter({ db, cache, mailer, config, authGuard }) {
       if (!EMAIL_RE.test(email)) throw new HttpError(400, '请输入正确的邮箱地址');
       if (!AUTH_PURPOSES.includes(purpose)) throw new HttpError(400, '验证码用途不正确');
 
-      const existingRows = await db.query('SELECT id FROM users WHERE email = ? LIMIT 1', [email]);
+      const existingRows = await db.query('SELECT id, status FROM users WHERE email = ? LIMIT 1', [email]);
       const emailExists = existingRows.length > 0;
       if (purpose === 'register' && emailExists) {
         throw new HttpError(409, '该邮箱已注册，请直接登录');
       }
       if (purpose === 'login' && !emailExists) {
         throw new HttpError(400, '该邮箱尚未注册，请先注册');
+      }
+      if (purpose === 'login' && Number(existingRows[0].status) === 0) {
+        throw new HttpError(403, '账号已被封禁，请联系管理员');
       }
 
       if (!mailer.mode || mailer.mode === 'console') {
@@ -155,6 +158,11 @@ export function createAuthRouter({ db, cache, mailer, config, authGuard }) {
       if (!existing) {
         await writeLoginLog(db, { userId: 0, email, ip, userAgent, status: 0 });
         return res.status(400).json({ msg: '该邮箱尚未注册，请先注册' });
+      }
+
+      if (Number(existing.status) === 0) {
+        await writeLoginLog(db, { userId: existing.id, email, ip, userAgent, status: 0 });
+        return res.status(403).json({ msg: '账号已被封禁，请联系管理员' });
       }
 
       // 非法格式同样属于一次失败登录尝试，需记录 login_logs

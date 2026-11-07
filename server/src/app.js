@@ -1,6 +1,9 @@
 import express from 'express';
 import cors from 'cors';
+import { createAdminRouter } from './routes/admin.js';
+import { createReportsRouter } from './routes/reports.js';
 import { createAuthGuard, createOptionalAuth } from './middleware/auth.js';
+import { createAdminGuard } from './middleware/adminAuth.js';
 import { errorHandler, notFoundApi } from './middleware/error.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createBooksRouter } from './routes/books.js';
@@ -37,8 +40,9 @@ export function createApp(deps) {
 
   app.use('/uploads', express.static(config.uploadDir, { maxAge: '7d', fallthrough: true }));
 
-  const authGuard = createAuthGuard(config);
+  const authGuard = createAuthGuard(config, deps.db);
   const optionalAuth = createOptionalAuth(config);
+  const adminGuard = createAdminGuard(config, deps.db);
 
   app.use('/api/auth', createAuthRouter({ ...deps, authGuard, optionalAuth }));
   app.use('/api/posts', createPostsRouter({ ...deps, authGuard, optionalAuth }));
@@ -48,6 +52,8 @@ export function createApp(deps) {
   app.use('/api/chat', createChatRouter(deps));
   app.use('/api/users', createUsersRouter({ ...deps, authGuard, optionalAuth }));
   app.use('/api/stats', createStatsRouter(deps));
+  app.use('/api/reports', createReportsRouter({ ...deps, authGuard }));
+  app.use('/api/admin', createAdminRouter({ ...deps, adminGuard }));
 
   app.use('/api', notFoundApi);
   app.use(errorHandler);

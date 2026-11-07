@@ -93,6 +93,38 @@ npm run dev
 
 登录后可以点击右上角头像菜单的「编辑资料」，或在个人主页点击「编辑资料」，修改昵称与头像（头像支持 JPG / PNG / GIF / WebP，≤5MB）。
 
+### 门店管理后台
+
+社区内置多门店管理后台，入口为：
+
+- 一号门店：<http://127.0.0.1:5173/store/1001>
+- 二号门店：<http://127.0.0.1:5173/store/1002>
+
+登录需要经过两级验证：
+
+1. **统一管理密码**：所有门店共用的第一级密码，通过 `ADMIN_GATE_PASSWORD` 配置；
+2. **个人登录密码**：每个门店管理员自己的账号 + scrypt 哈希密码。
+
+首次使用先创建门店管理员（密码至少 8 位）：
+
+```powershell
+npm run admin:create -- --store 1001 --username admin1001 --password "请换成强密码" --name "一号门店管理员"
+npm run admin:create -- --store 1002 --username admin1002 --password "请换成另一个强密码" --name "二号门店管理员"
+```
+
+也可以设置 `ADMIN_BOOTSTRAP_PASSWORD` 后首次启动自动创建 `admin1001` / `admin1002`。
+
+后台支持：
+
+- 接收用户对**文章 / 图书**的举报；
+- 下架 / 恢复文章、图书；
+- 封锁 / 解除封锁用户（封锁后登录、发帖、评论、点赞、群聊均被拒绝）；
+- 查看全站文章、图书、用户和统计。
+
+> 当前社区内容为全站共享，两个门店后台分别使用独立管理员账号，但共享同一份内容与举报队列；门店入口和管理员账号彼此隔离。
+
+创建管理员时不会把密码写入代码；数据库中只保存 `scrypt` 哈希和随机盐。
+
 也可分别启动：
 
 ```powershell
@@ -163,6 +195,9 @@ SMTP_FROM=赤光社 <your_email@qq.com>
 
    > 从 v1.0.0 及更早版本升级已有 MySQL 数据库（缺少 `username` / `community_no` 字段）时，先执行一次：
    > `mysql -u root -p redlight < server/src/schema/migrations/001_user_identity.sql`
+   >
+   > 升级门店后台、举报与文章/用户状态时再执行：
+   > `mysql -u root -p redlight < server/src/schema/migrations/002_admin.sql`
 
 2. 修改 `.env`：
 
@@ -204,8 +239,10 @@ docker compose up -d --build
 
 注意事项：
 
-- 修改 schema 后若 MySQL 数据卷已初始化，需要 `docker compose down -v` 再启动才能重新执行建表脚本。
-- 生产环境务必设置强随机 `JWT_SECRET` 与数据库密码。
+- 修改 schema 后若 MySQL 数据卷已初始化，需要 `docker compose down -v` 再启动才能重新执行建表脚本；生产数据请改用 `server/src/schema/migrations/` 下的迁移脚本。
+- 首次部署可在 `.env` 设置 `ADMIN_BOOTSTRAP_PASSWORD` 自动创建 `admin1001` / `admin1002`；也可在容器内执行：
+  `docker compose exec backend node scripts/create-admin.mjs --store 1001 --username admin1001 --password "强密码" --name "一号门店管理员"`。
+- 生产环境务必设置强随机 `JWT_SECRET`、`ADMIN_GATE_PASSWORD` 与数据库密码。
 - 容器内 `CORS_ORIGIN` 默认 `*`；若前后端同域部署（默认 Nginx 代理），可保持默认。
 
 ---
@@ -218,7 +255,7 @@ docker compose up -d --build
 npm run test:server
 ```
 
-覆盖：健康检查、双 schema 字段一致性、验证码 6 位 / 5 分钟 / 60 秒限流、登录日志（成功 / 失败 / IP / UA）、自动注册与 7 天 JWT、401、发帖 1000 字 / 9 图限制、信息流倒序分页、点赞幂等、评论计数、转发引用、ZIP 安全解压（路径穿越 / 可执行文件 / 无 PDF / 体积限制 / 清理）、封面提取（PDF 渲染 + EPUB 内置封面）、下载计数、搜索分页 / 分类 / 中文、群聊鉴权 / 广播 / 在线统计 / 历史上翻、用户主页、热榜缓存、社区统计。
+覆盖：健康检查、双 schema 字段一致性、验证码 6 位 / 5 分钟 / 60 秒限流、登录日志（成功 / 失败 / IP / UA）、注册 / 登录分离、自定义用户名 ID 与社区号、7 天 JWT、401、发帖 1000 字 / 9 图限制、信息流倒序分页、点赞幂等、评论计数、转发引用、ZIP 安全解压（路径穿越 / 可执行文件 / 无 PDF / 体积限制 / 清理）、封面提取（PDF 渲染 + EPUB 内置封面）、下载计数、搜索分页 / 分类 / 中文、群聊鉴权 / 广播 / 在线统计 / 历史上翻、用户主页、热榜缓存、社区统计、门店两级密码、举报处理、文章 / 图书 / 用户状态管理。
 
 ### 2. 前端单元测试（Vitest + Vue Test Utils + happy-dom）
 
@@ -236,7 +273,7 @@ npm run e2e
 
 脚本会自行在 3101 / 5188 端口启动后端（临时 SQLite）与 Vite，使用无头 Edge 执行：
 
-登录守卫 → 邮箱验证码注册（自定义 ID / 社区号）→ 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言。
+登录守卫 → 邮箱验证码注册（自定义 ID / 社区号）→ 三栏布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（双用户实时消息）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言 → 提交举报 → 门店后台两级验证 → 查看举报并下架文章。
 
 截图与结果保存在 `e2e/screenshots/`（含 `e2e-result.json`）。
 
@@ -266,6 +303,7 @@ npm run build
 | POST | `/api/posts/:id/like` | 点赞 / 取消（幂等） |
 | GET/POST | `/api/posts/:id/comments` | 评论列表 / 发表评论 |
 | POST | `/api/posts/:id/repost` | 转发（写 `repost_id`） |
+| POST | `/api/reports` | 举报文章 / 图书 |
 | POST | `/api/upload/image` | 图片上传（≤5MB） |
 | POST | `/api/books/upload` | 图书 ZIP 上传（≤100MB，字段 `zipFile`） |
 | GET | `/api/books?category&page&size` | 图书库 |
@@ -281,6 +319,16 @@ npm run build
 | GET | `/api/stats/hot-topics` | 近 500 帖话题热榜（缓存 60 秒） |
 | GET | `/api/stats/community` | 社区数据 |
 | GET | `/api/stats/online` | 在线用户 |
+| POST | `/api/admin/gate` | 门店后台第一级统一密码验证 |
+| POST | `/api/admin/login` | 门店管理员个人密码登录，返回 2 小时管理员 JWT |
+| GET | `/api/admin/me` | 当前管理员与门店信息 |
+| GET | `/api/admin/stats` | 后台统计 |
+| GET | `/api/admin/reports?status=0` | 举报列表 |
+| POST | `/api/admin/reports/:id/action` | 处理举报：下架文章 / 图书、封锁作者、忽略 |
+| GET/POST | `/api/admin/posts`、`/api/admin/posts/:id/status` | 文章管理 / 上下架 |
+| GET/POST | `/api/admin/books`、`/api/admin/books/:id/status` | 图书管理 / 上下架 |
+| GET/POST | `/api/admin/users`、`/api/admin/users/:id/status` | 用户管理 / 封锁 |
+| GET | `/api/admin/stores/:storeId/public` | 门店入口公开信息 |
 
 Socket.IO：连接时 `auth.token` 携带 JWT；发送 `chat:send` `{ type: 1|2, content }`；接收 `chat:message`、`chat:online`、`chat:error`、`chat:ready`。
 
@@ -302,7 +350,10 @@ Socket.IO：连接时 `auth.token` 携带 JWT；发送 `chat:send` `{ type: 1|2,
 - ZIP 上传校验魔数、路径穿越（`../` / 绝对路径 / 符号链接）、可执行文件、条目数（2000）、解压体积（500MB）、压缩比（zip bomb），异常时清理临时 ZIP 与解压目录；
 - 上传大小限制：图片 5MB、ZIP 100MB（后端 Multer + Nginx `client_max_body_size` 双重限制）；
 - 帖子正文先 HTML 转义再渲染话题 / @，避免 XSS；
-- 图书文件路径限制在 `uploads/` 内，禁止任意文件读取。
+- 图书文件路径限制在 `uploads/` 内，禁止任意文件读取；
+- 管理后台两级验证：全站统一密码 + 门店管理员个人密码（scrypt + 随机盐），管理员 JWT 2 小时，10 分钟内连续失败 10 次触发限流；
+- 用户封锁状态在 JWT 守卫、登录、验证码发送和 Socket.IO 消息发送时回查，锁定后立即失去写权限；
+- 文章 / 图书下架状态由公开查询过滤，管理员后台仍可查看并恢复。
 
 **版权提示**：请上传公有领域或已获授权的马列原著文献；请勿上传受版权保护且未获授权的电子书。本项目仅用于学习交流。
 

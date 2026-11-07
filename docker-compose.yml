@@ -56,6 +56,9 @@ services:
       DB_NAME: ${DB_NAME:-redlight}
       REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-please-change-this-jwt-secret}
+      ADMIN_GATE_PASSWORD: ${ADMIN_GATE_PASSWORD:-redlight-admin-gate}
+      ADMIN_TOKEN_EXPIRES_IN: ${ADMIN_TOKEN_EXPIRES_IN:-2h}
+      ADMIN_BOOTSTRAP_PASSWORD: ${ADMIN_BOOTSTRAP_PASSWORD:-}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-465}
       SMTP_SECURE: ${SMTP_SECURE:-true}

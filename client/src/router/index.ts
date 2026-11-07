@@ -66,6 +66,12 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '上传图书' },
     },
     {
+      path: '/store/:storeId(\\d+)',
+      name: 'store-admin',
+      component: () => import('@/views/AdminPortal.vue'),
+      meta: { title: '门店管理后台' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFound.vue'),

@@ -47,6 +47,7 @@ server/data/redlight.db-shm
 | `community_no` | 系统随机生成的唯一 6 位社区号，主要用于数据库查询 |
 | `nickname` | 展示昵称，注册时默认等于用户名 ID，之后可在「编辑资料」中修改 |
 | `avatar_url` | 头像地址 |
+| `status` | `1` 正常、`0` 已封锁；封锁后无法登录和写入 |
 
 ```sql
 -- 按社区号查询用户
@@ -58,6 +59,37 @@ WHERE community_no = '123456';
 SELECT id, nickname, username, community_no
 FROM users
 WHERE username = 'redstar_2026';
+```
+
+### 门店管理后台表
+
+| 表 | 说明 |
+| --- | --- |
+| `stores` | 门店编号（默认 `1001` / `1002`）与名称 |
+| `store_admins` | 门店管理员账号、scrypt 密码哈希、随机盐、启用状态、最后登录时间 |
+| `reports` | 举报记录：`target_type`（post / book）、`target_id`、原因、补充说明、处理状态与处理动作 |
+| `posts.status` | `1` 正常、`0` 已下架 |
+| `books.status` | `1` 正常、`0` 已下架 |
+
+```sql
+-- 查看门店与管理员（密码只存哈希，不可逆）
+SELECT s.id, s.name, a.username, a.display_name, a.status, a.last_login_at
+FROM stores s
+LEFT JOIN store_admins a ON a.store_id = s.id
+ORDER BY s.id, a.id;
+
+-- 查看待处理举报
+SELECT id, target_type, target_id, reason, detail, created_at
+FROM reports
+WHERE status = 0
+ORDER BY id DESC;
+
+-- 查看被下架文章 / 图书
+SELECT id, user_id, content, status FROM posts WHERE status = 0;
+SELECT id, uploader_id, title, status FROM books WHERE status = 0;
+
+-- 查看被封锁用户
+SELECT id, nickname, username, community_no, email FROM users WHERE status = 0;
 ```
 
 ### 可读视图 `login_log_details`

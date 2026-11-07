@@ -229,6 +229,8 @@ async function main() {
       DB_FILE: path.join(tempDir, 'redlight.db'),
       UPLOAD_DIR: path.join(tempDir, 'uploads'),
       JWT_SECRET: 'redlight-e2e-secret',
+      ADMIN_GATE_PASSWORD: 'redlight-admin-gate',
+      ADMIN_BOOTSTRAP_PASSWORD: 'Admin@12345',
       SMTP_HOST: '',
       REDIS_URL: '',
       CORS_ORIGIN: '*',
@@ -330,7 +332,10 @@ async function main() {
     (response) => response.url().endsWith('/api/posts') && response.request().method() === 'POST',
   );
   await page.click('[data-testid="composer-submit"]');
-  assert((await createPostResponse).status() === 200, '发布帖子应成功');
+  const createPostResult = await createPostResponse;
+  assert(createPostResult.status() === 200, '发布帖子应成功');
+  const createPostBody = await createPostResult.json();
+  const postId = createPostBody.post.id;
   await page.waitForSelector(`.post-card:has-text("自动化验收动态")`);
   const postCard = page.locator('.post-card').filter({ hasText: '自动化验收动态' }).first();
   assert((await postCard.locator('.topic-link').textContent()).includes('共产党宣言'), '话题应高亮');
@@ -628,6 +633,49 @@ async function main() {
   });
   await page.waitForSelector('[data-testid="search-book-grid"] .book-card');
   await shot(page, 'mobile-search');
+
+  // 16. 提交举报并在门店后台查看
+  log('提交举报并进入门店管理后台...');
+  const reportResponse = await fetch(`${serverBase}/api/reports`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', authorization: `Bearer ${secondLogin.token}` },
+    body: JSON.stringify({
+      targetType: 'post',
+      targetId: postId,
+      reason: '违法违规',
+      detail: 'E2E 自动化举报：请管理员核实这条测试动态。',
+    }),
+  });
+  const reportBody = await reportResponse.json();
+  assert(reportResponse.ok, `提交举报应成功：${JSON.stringify(reportBody)}`);
+
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${webBase}/store/1001`, { waitUntil: 'networkidle' });
+  await waitForTestId(page, 'admin-gate-password');
+  await fillTestId(page, 'admin-gate-password', 'redlight-admin-gate');
+  await page.click('[data-testid="admin-gate-submit"]');
+  await waitForTestId(page, 'admin-username');
+  await fillTestId(page, 'admin-username', 'admin1001');
+  await fillTestId(page, 'admin-password', 'Admin@12345');
+  await page.click('[data-testid="admin-login-submit"]');
+  await waitForTestId(page, 'admin-dashboard');
+  await waitForText(page.locator('[data-testid="admin-report-list"]'), '自动化验收动态');
+  assert((await page.locator('.admin-brand').textContent()).includes('一号门店'), '后台应显示门店名称');
+  assert((await page.locator('[data-testid="admin-dashboard"]').textContent()).includes('待处理举报'), '后台应显示举报统计');
+  await sleep(500);
+  await shot(page, 'admin-dashboard');
+
+  log('在后台下架被举报文章...');
+  const reportActionResponse = page.waitForResponse(
+    (response) => response.url().includes('/api/admin/reports/') && response.url().endsWith('/action'),
+  );
+  await page.click('[data-testid="admin-remove-target"]');
+  await page.waitForSelector('.ant-modal-confirm', { state: 'visible' });
+  await page.click('.ant-modal-confirm-btns .ant-btn-dangerous');
+  assert((await reportActionResponse).status() === 200, '后台下架文章应成功');
+  await waitForText(page.locator('[data-testid="admin-dashboard"]'), '暂无举报，社区秩序良好');
+  await sleep(300);
+  await shot(page, 'admin-report-handled');
 
   assert(pageErrors.length === 0, `页面存在未捕获异常：${pageErrors.join(' | ')}`);
   const relevantConsoleErrors = consoleErrors.filter(
