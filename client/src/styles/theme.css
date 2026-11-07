@@ -343,9 +343,15 @@ p {
 }
 
 .ant-modal .ant-modal-content {
-  padding: 0;
+  padding: 22px 26px;
+  border: 1px solid var(--rl-border);
   border-radius: var(--rl-radius-card);
   overflow: hidden;
+}
+
+/* 编辑资料弹窗使用自定义整块头部，单独取消 Ant 默认内容 padding */
+.profile-edit-wrap .ant-modal-content {
+  padding: 0;
 }
 
 .ant-modal .ant-modal-close {

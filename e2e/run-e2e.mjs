@@ -693,6 +693,11 @@ async function main() {
   );
   await page.click('[data-testid="admin-remove-target"]');
   await page.waitForSelector('.ant-modal-confirm', { state: 'visible' });
+  const confirmPadding = await page.locator('.ant-modal-content').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { top: parseFloat(style.paddingTop), left: parseFloat(style.paddingLeft) };
+  });
+  assert(confirmPadding.top >= 20 && confirmPadding.left >= 20, `后台确认弹窗内边距不足：${JSON.stringify(confirmPadding)}`);
   await page.click('.ant-modal-confirm-btns .ant-btn-dangerous');
   assert((await reportActionResponse).status() === 200, '后台下架文章应成功');
   await waitForText(page.locator('[data-testid="admin-dashboard"]'), '暂无举报，社区秩序良好');
@@ -711,6 +716,21 @@ async function main() {
   await waitForText(page.locator('[data-testid="admin-dashboard"]'), 'org.001.gate_password');
   await sleep(500);
   await shot(page, 'sql-admin');
+
+  log('检查举报弹窗边框与内边距...');
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto(`${webBase}/books/${uploadedBody.book.id}`, { waitUntil: 'networkidle' });
+  await page.waitForSelector('[data-testid="book-title"]');
+  await page.click('[data-testid="report-book"]');
+  await page.waitForSelector('[data-testid="report-dialog"]');
+  await sleep(300);
+  const reportPadding = await page.locator('.ant-modal-content').evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { top: parseFloat(style.paddingTop), left: parseFloat(style.paddingLeft) };
+  });
+  assert(reportPadding.top >= 20 && reportPadding.left >= 20, `举报弹窗内边距不足：${JSON.stringify(reportPadding)}`);
+  await shot(page, 'report-dialog');
+  await page.locator('.ant-modal-close').click();
 
   assert(pageErrors.length === 0, `页面存在未捕获异常：${pageErrors.join(' | ')}`);
   const relevantConsoleErrors = consoleErrors.filter(
