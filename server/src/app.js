@@ -8,6 +8,7 @@ import { errorHandler, notFoundApi } from './middleware/error.js';
 import { createAuthRouter } from './routes/auth.js';
 import { createBooksRouter } from './routes/books.js';
 import { createChatRouter } from './routes/chat.js';
+import { createModerationRouter } from './routes/moderation.js';
 import { createPostsRouter } from './routes/posts.js';
 import { createProposalsRouter } from './routes/proposals.js';
 import { createSearchRouter } from './routes/search.js';
@@ -55,6 +56,7 @@ export function createApp(deps) {
   app.use('/api/users', createUsersRouter({ ...deps, authGuard, optionalAuth }));
   app.use('/api/stats', createStatsRouter(deps));
   app.use('/api/reports', createReportsRouter({ ...deps, authGuard }));
+  app.use('/api/moderation', createModerationRouter({ ...deps, authGuard }));
   app.use('/api/admin', createAdminRouter({ ...deps, adminGuard }));
 
   app.use('/api', notFoundApi);

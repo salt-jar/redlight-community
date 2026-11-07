@@ -93,7 +93,7 @@ export function createSocket(httpServer, { db, config, online, logger = console 
           [groupId, Number(user.id), type, content],
         );
         const rows = await db.query(
-          `SELECT m.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url
+          `SELECT m.*, u.nickname AS author_nickname, u.avatar_url AS author_avatar_url, u.role AS author_role
            FROM chat_messages m JOIN users u ON u.id = m.user_id WHERE m.id = ? LIMIT 1`,
           [result.insertId],
         );

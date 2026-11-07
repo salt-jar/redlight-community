@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { asyncHandler, parsePagination } from '../utils/http.js';
 import { HttpError } from '../utils/errors.js';
 import { createAdminGuard } from '../middleware/adminAuth.js';
+import { ensureAdminCommunityUser, isValidAdminEmail } from '../services/adminAccounts.js';
 import { verifyPassword, safeCompare, hashPassword } from '../utils/password.js';
 import { serializeBook, serializePublicUser, toIso } from '../utils/serialize.js';
 
@@ -198,6 +199,70 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
     }),
   );
 
+  // 组织管理员注册：通过组织一级密码后，同时创建组织管理员与社区用户账号
+  router.post(
+    '/orgs/:orgCode/register',
+    asyncHandler(async (req, res) => {
+      const orgCode = normalizeOrgCode(req.params.orgCode);
+      const org = await getOrg(orgCode);
+      const gateToken = String(req.body?.gateToken || '');
+      const username = String(req.body?.username || '').trim();
+      const password = String(req.body?.password || '');
+      const displayName = String(req.body?.displayName || '').trim() || username;
+      const email = String(req.body?.email || '').trim().toLowerCase();
+      if (!username || !password) throw new HttpError(400, '请输入管理员账号和密码');
+      if (!/^[A-Za-z0-9_\u4e00-\u9fa5]{2,32}$/.test(username)) {
+        throw new HttpError(400, '管理员账号需为 2–32 位中文、字母、数字或下划线');
+      }
+      if (password.length < 8) throw new HttpError(400, '个人登录密码至少 8 位');
+      if (!isValidAdminEmail(email)) throw new HttpError(400, '请填写管理员关联社区账号的有效邮箱');
+      let gatePayload;
+      try {
+        gatePayload = jwtVerify(gateToken, config.jwtSecret);
+      } catch {
+        throw new HttpError(401, '组织验证已过期，请重新输入系统密码');
+      }
+      if (gatePayload.type !== 'admin-gate' || gatePayload.scope !== 'org' || gatePayload.orgCode !== orgCode) {
+        throw new HttpError(401, '组织验证无效，请重新进入');
+      }
+      const existing = await db.query(
+        'SELECT id FROM organization_admins WHERE org_code = ? AND username = ? LIMIT 1',
+        [orgCode, username],
+      );
+      if (existing.length) throw new HttpError(409, '该管理员账号已存在，请直接登录');
+
+      const user = await ensureAdminCommunityUser(db, {
+        email,
+        username,
+        displayName,
+        orgCode,
+      });
+      const { salt, hash } = hashPassword(password);
+      const result = await db.query(
+        'INSERT INTO organization_admins (org_code, username, password_hash, password_salt, display_name, user_id, last_login_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+        [orgCode, username, hash, salt, displayName, Number(user.id)],
+      );
+      const token = jwtSign(
+        { type: 'admin', scope: 'org', adminId: Number(result.insertId), orgCode },
+        config.jwtSecret,
+        config.adminTokenExpiresIn || '2h',
+      );
+      res.status(201).json({
+        token,
+        admin: {
+          id: Number(result.insertId),
+          username,
+          displayName,
+          scope: 'org',
+          orgCode,
+          userId: Number(user.id),
+          email: user.email,
+        },
+        organization: { code: org.code, name: org.name },
+      });
+    }),
+  );
+
   // 组织第二级：个人管理员账号密码
   router.post(
     '/orgs/:orgCode/login',
@@ -231,6 +296,22 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
       }
       await cache.del(attemptKey);
 
+      let adminUserId = admin.user_id ? Number(admin.user_id) : null;
+      let linkedUser = null;
+      if (!adminUserId) {
+        linkedUser = await ensureAdminCommunityUser(db, {
+          email: '',
+          username: admin.username,
+          displayName: admin.display_name || admin.username,
+          orgCode,
+        });
+        adminUserId = Number(linkedUser.id);
+        await db.query('UPDATE organization_admins SET user_id = ? WHERE id = ?', [adminUserId, admin.id]);
+      } else {
+        const rows = await db.query('SELECT email FROM users WHERE id = ? LIMIT 1', [adminUserId]);
+        linkedUser = rows[0] || null;
+      }
+
       const org = await getOrg(orgCode);
       await db.query('UPDATE organization_admins SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [admin.id]);
       const token = jwtSign(
@@ -246,6 +327,8 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
           displayName: admin.display_name || admin.username,
           scope: 'org',
           orgCode,
+          userId: adminUserId,
+          email: linkedUser?.email || '',
         },
         organization: { code: org.code, name: org.name },
       });
@@ -303,6 +386,7 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
           displayName: admin.display_name || admin.username,
           scope: 'org',
           orgCode: admin.org_code,
+          userId: admin.user_id ? Number(admin.user_id) : null,
         },
         organization: { code: org.code, name: org.name },
       });
@@ -338,8 +422,11 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
       requireDeveloper(req);
       const orgCode = req.query.orgCode ? normalizeOrgCode(req.query.orgCode) : null;
       const rows = await db.query(
-        `SELECT a.id, a.org_code, a.username, a.display_name, a.status, a.last_login_at, a.created_at
-         FROM organization_admins a ${orgCode ? 'WHERE a.org_code = ?' : ''} ORDER BY a.id DESC`,
+        `SELECT a.id, a.org_code, a.username, a.display_name, a.status, a.last_login_at, a.created_at,
+                a.user_id, u.email AS user_email, u.nickname AS user_nickname, u.username AS user_username,
+                u.community_no AS user_community_no
+         FROM organization_admins a LEFT JOIN users u ON u.id = a.user_id
+         ${orgCode ? 'WHERE a.org_code = ?' : ''} ORDER BY a.id DESC`,
         orgCode ? [orgCode] : [],
       );
       res.json({
@@ -351,6 +438,11 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
           status: Number(row.status),
           lastLoginAt: toIso(row.last_login_at),
           createdAt: toIso(row.created_at),
+          userId: row.user_id ? Number(row.user_id) : null,
+          userEmail: row.user_email || '',
+          userNickname: row.user_nickname || '',
+          userUsername: row.user_username || '',
+          userCommunityNo: row.user_community_no || '',
         })),
       });
     }),
@@ -365,28 +457,42 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
       const username = String(req.body?.username || '').trim();
       const password = String(req.body?.password || '');
       const displayName = String(req.body?.displayName || '').trim() || username;
+      const email = String(req.body?.email || '').trim().toLowerCase();
       if (!/^[A-Za-z0-9_\u4e00-\u9fa5]{2,32}$/.test(username)) {
         throw new HttpError(400, '管理员账号需为 2–32 位中文、字母、数字或下划线');
       }
       if (password.length < 8) throw new HttpError(400, '个人登录密码至少 8 位');
+      if (email && !isValidAdminEmail(email)) throw new HttpError(400, '管理员关联社区邮箱格式不正确');
       await getOrg(orgCode);
       const existing = await db.query(
-        'SELECT id FROM organization_admins WHERE org_code = ? AND username = ? LIMIT 1',
+        'SELECT id, user_id FROM organization_admins WHERE org_code = ? AND username = ? LIMIT 1',
         [orgCode, username],
       );
+      const user = await ensureAdminCommunityUser(db, {
+        email,
+        username,
+        displayName,
+        orgCode,
+      });
       const { salt, hash } = hashPassword(password);
       if (existing.length) {
         await db.query(
-          'UPDATE organization_admins SET password_hash = ?, password_salt = ?, display_name = ?, status = 1 WHERE id = ?',
-          [hash, salt, displayName, existing[0].id],
+          'UPDATE organization_admins SET password_hash = ?, password_salt = ?, display_name = ?, user_id = ?, status = 1 WHERE id = ?',
+          [hash, salt, displayName, Number(user.id), existing[0].id],
         );
-        return res.json({ success: true, id: Number(existing[0].id), updated: true });
+        return res.json({
+          success: true,
+          id: Number(existing[0].id),
+          userId: Number(user.id),
+          email: user.email,
+          updated: true,
+        });
       }
       const result = await db.query(
-        'INSERT INTO organization_admins (org_code, username, password_hash, password_salt, display_name) VALUES (?, ?, ?, ?, ?)',
-        [orgCode, username, hash, salt, displayName],
+        'INSERT INTO organization_admins (org_code, username, password_hash, password_salt, display_name, user_id) VALUES (?, ?, ?, ?, ?, ?)',
+        [orgCode, username, hash, salt, displayName, Number(user.id)],
       );
-      res.json({ success: true, id: result.insertId, updated: false });
+      res.json({ success: true, id: result.insertId, userId: Number(user.id), email: user.email, updated: false });
     }),
   );
 
@@ -436,6 +542,65 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
         books: Number(books[0]?.total || 0),
         blockedUsers: Number(blockedUsers[0]?.total || 0),
         users: Number(users[0]?.total || 0),
+      });
+    }),
+  );
+
+  router.get(
+    '/chat-groups',
+    authGuard,
+    asyncHandler(async (_req, res) => {
+      const rows = await db.query(
+        `SELECT g.*, (SELECT COUNT(*) FROM chat_messages m WHERE m.group_id = g.id) AS message_count
+         FROM chat_groups g ORDER BY g.sort_order, g.id`,
+      );
+      res.json({
+        list: rows.map((row) => ({
+          id: Number(row.id),
+          name: row.name,
+          description: row.description || '',
+          sortOrder: Number(row.sort_order),
+          status: Number(row.status),
+          messageCount: Number(row.message_count || 0),
+          createdAt: toIso(row.created_at),
+        })),
+      });
+    }),
+  );
+
+  router.post(
+    '/chat-groups',
+    authGuard,
+    asyncHandler(async (req, res) => {
+      const name = String(req.body?.name || '').trim();
+      const description = String(req.body?.description || '').trim();
+      if (Array.from(name).length < 2 || Array.from(name).length > 32) {
+        throw new HttpError(400, '群聊名称需为 2–32 个字符');
+      }
+      if (Array.from(description).length > 255) throw new HttpError(400, '群聊说明不能超过 255 个字符');
+      const duplicate = await db.query('SELECT id FROM chat_groups WHERE name = ? LIMIT 1', [name]);
+      if (duplicate.length) throw new HttpError(409, '同名群聊已存在');
+      const countRows = await db.query('SELECT COUNT(*) AS total, COALESCE(MAX(id), 0) AS max_id, COALESCE(MAX(sort_order), 0) AS max_order FROM chat_groups');
+      const total = Number(countRows[0]?.total || 0);
+      if (total >= 30) throw new HttpError(400, '群聊数量已达上限');
+      const id = Number(countRows[0]?.max_id || 0) + 1;
+      const sortOrder = Number(countRows[0]?.max_order || 0) + 1;
+      await db.query(
+        'INSERT INTO chat_groups (id, name, description, sort_order, status) VALUES (?, ?, ?, ?, 1)',
+        [id, name, description, sortOrder],
+      );
+      const rows = await db.query('SELECT * FROM chat_groups WHERE id = ? LIMIT 1', [id]);
+      const row = rows[0];
+      res.status(201).json({
+        group: {
+          id: Number(row.id),
+          name: row.name,
+          description: row.description || '',
+          sortOrder: Number(row.sort_order),
+          status: Number(row.status),
+          messageCount: 0,
+          createdAt: toIso(row.created_at),
+        },
       });
     }),
   );

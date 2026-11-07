@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "logins": "node scripts/show-logins.mjs",
     "admin:create": "node scripts/create-org-admin.mjs",
-    "org:admin:create": "node scripts/create-org-admin.mjs"
+    "org:admin:create": "node scripts/create-org-admin.mjs",
+    "demo:accounts": "node scripts/create-demo-accounts.mjs"
   },
   "engines": {
     "node": ">=20.19.0"

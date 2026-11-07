@@ -66,10 +66,11 @@ WHERE username = 'redstar_2026';
 | 表 | 说明 |
 | --- | --- |
 | `organizations` | 组织编号（默认 `001`）与名称 |
-| `organization_admins` | 组织管理员账号、scrypt 密码哈希、随机盐、启用状态、最后登录时间 |
+| `organization_admins` | 组织管理员账号、scrypt 密码哈希、随机盐、关联社区用户 `user_id`、启用状态、最后登录时间 |
 | `system_settings` | 系统设置；`org.001.gate_password` 是 001 组织第一级系统密码，默认 `SQL` |
 | `reports` | 举报记录：`target_type`（post / book）、`target_id`、原因、补充说明、处理状态与处理动作 |
 | `chat_groups` | 群聊分组：赤光总群、理论学习、文献研究、青年同志；控制群名称和顺序 |
+| `users.role` | `0` 普通用户；`1` 管理员社区账号（群聊蓝色「管理员」标识，可使用 `/api/moderation` 直接治理） |
 | `chat_messages.group_id` | 消息所属群，群聊记录按群隔离 |
 | `proposals` | 群聊提案：标题、提案时间、发起人信息、正文、发起用户 |
 | `posts.status` | `1` 正常、`0` 已下架 |
@@ -77,9 +78,11 @@ WHERE username = 'redstar_2026';
 
 ```sql
 -- 查看组织与管理员（密码只存哈希，不可逆）
-SELECT o.code, o.name, a.username, a.display_name, a.status, a.last_login_at
+SELECT o.code, o.name, a.username, a.display_name, a.user_id, u.email AS user_email,
+       u.nickname AS user_nickname, u.community_no, a.status, a.last_login_at
 FROM organizations o
 LEFT JOIN organization_admins a ON a.org_code = o.code
+LEFT JOIN users u ON u.id = a.user_id
 ORDER BY o.code, a.id;
 
 -- 查看 / 修改组织 001 第一级系统密码

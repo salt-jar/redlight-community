@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS organization_admins (
     password_hash TEXT    NOT NULL,
     password_salt TEXT    NOT NULL,
     display_name  TEXT    DEFAULT '',
+    user_id       INTEGER NULL,
     status        INTEGER DEFAULT 1,
     last_login_at TEXT    NULL,
     created_at    TEXT    DEFAULT CURRENT_TIMESTAMP,

@@ -10,6 +10,9 @@
 - 首页「大字报」、图书、我的页面均采用全宽布局：全局导航贴左，内容撑满剩余宽度，不再居中留白；
 - 群聊四栏全宽布局：全局导航 / 群列表 / 聊天主区 / 提案功能面板，无间隙撑满页面；
 - 群列表支持竖向切换「赤光总群、理论学习、文献研究、青年同志」，消息按群隔离；
+- 组织管理员注册时同步创建同邮箱的社区用户，群聊显示蓝色「管理员」标识；
+- 组织后台新增群聊管理，管理员可创建群聊（普通用户无权限）；
+- 管理员社区账号可直接下架文章 / 图书、封禁用户，无需进入 `/org/001`；
 - 右侧提案面板默认激活：提案预览、提案详情、发起提案表单，内容竖向单列；
 - 组织 001 后台：SQL 系统设置密码 + 组织管理员个人密码两级验证；
 - `/sql` SQL 开发者管理系统：密码 `1111`，可管理组织、组织管理员和系统设置；
@@ -141,10 +144,37 @@ WHERE setting_key = 'org.001.gate_password';
 创建 / 重置组织管理员：
 
 ```powershell
-npm run admin:create -- --org 001 --username admin001 --password "至少8位个人密码" --name "组织管理员"
+npm run admin:create -- --org 001 --username admin001 --password "至少8位个人密码" --name "组织管理员" --email "admin001@example.com"
 ```
 
 也可以设置 `ORG_ADMIN_BOOTSTRAP_PASSWORD` 后首次启动自动创建 `admin001`。
+
+- 组织管理员首次登录时，如果还没有关联社区用户，会自动创建并关联社区账号（未指定邮箱时使用系统生成邮箱）；
+- 通过组织一级密码后，登录页还提供「注册管理员」表单，可一次创建组织管理员 + 社区用户；
+- 管理员社区账号 `users.role = 1`，在群聊消息中显示蓝色「管理员」标识；
+- 管理员可以在组织后台「群聊管理」创建新群聊，普通用户没有该权限；
+- 管理员登录社区后，可以直接在文章菜单中「下架文章」、在图书详情页「管理员下架」、在用户主页「封禁此用户」，不需要再进入 `/org/001`。
+
+#### 本地演示账号
+
+```powershell
+cd server
+npm run demo:accounts
+```
+
+脚本会确保以下账号存在（密码用于管理员后台；社区登录使用邮箱验证码）：
+
+| 身份 | 管理员账号 | 密码 | 关联社区邮箱 / 昵称 |
+| --- | --- | --- | --- |
+| 组织管理员 | `demo_admin` | `Admin@12345` | `demo_admin@redlight.local` / 赤光管理员 |
+
+| 普通用户邮箱 | 昵称 | 用户名 ID |
+| --- | --- | --- |
+| `xinghuo@redlight.local` | 同志_星火 | `@xinghuo` |
+| `shuguang@redlight.local` | 同志_曙光 | `@shuguang` |
+| `qingnian@redlight.local` | 同志_青年 | `@qingnian` |
+
+> 演示账号仅用于本地测试；第一级组织系统密码以本地 `system_settings` 的 `org.001.gate_password` 为准（当前本地值为 `2222`），部署到公网前请修改或删除演示账号。
 
 #### 2. SQL 开发者管理系统
 
@@ -159,7 +189,9 @@ npm run admin:create -- --org 001 --username admin001 --password "至少8位个�
 - 接收用户对**文章 / 图书**的举报；
 - 下架 / 恢复文章、图书；
 - 封锁 / 解除封锁用户（封锁后登录、发帖、评论、点赞、群聊均被拒绝，文章 / 图书 / 个人主页 / 搜索结果 / 群聊历史不再对普通用户展示）；
-- 查看全站文章、图书、用户和统计。
+- 查看全站文章、图书、用户和统计；
+- 管理员可创建 / 查看群聊；
+- 管理员社区账号可绕过组织后台，直接在社区界面执行下架和封禁。
 
 > 当前社区内容为全站共享：001 组织后台与 SQL 开发者系统共享同一份内容、举报队列；组织管理员只能进入组织后台，SQL 开发者系统拥有组织和系统设置权限。
 >
@@ -244,7 +276,7 @@ SMTP_FROM=赤光社 <your_email@qq.com>
    ```
 
    > 从 v1.0.0 及更早版本升级已有 MySQL 数据库（缺少 `username` / `community_no` 字段）时，按顺序执行：
-   > `001_user_identity.sql` → `002_admin.sql` → `003_organization_sql.sql` → `004_proposals.sql` → `005_chat_groups.sql`。
+   > `001_user_identity.sql` → `002_admin.sql` → `003_organization_sql.sql` → `004_proposals.sql` → `005_chat_groups.sql` → `006_admin_linked_user.sql`。
 
 2. 修改 `.env`：
 
@@ -302,9 +334,9 @@ docker compose up -d --build
 npm run test:server
 ```
 
-覆盖：健康检查、双 schema 字段一致性、验证码 6 位 / 5 分钟 / 60 秒限流、登录日志（成功 / 失败 / IP / UA）、注册 / 登录分离、自定义用户名 ID 与社区号、7 天 JWT、401、发帖 1000 字 / 9 图限制、信息流倒序分页、点赞幂等、评论计数、转发引用、ZIP 安全解压（路径穿越 / 可执行文件 / 无 PDF / 体积限制 / 清理）、封面提取（PDF 渲染 + EPUB 内置封面）、下载计数、搜索分页 / 分类 / 中文、群聊鉴权 / 分组消息广播 / 在线统计 / 历史上翻 / 群切换、提案创建 / 列表 / 详情 / 校验、用户主页、热榜缓存、社区统计、组织两级密码、SQL 开发者高权限系统、举报处理、文章 / 图书 / 用户状态管理、封锁后内容隐藏与解除恢复。
+覆盖：健康检查、双 schema 字段一致性、验证码 6 位 / 5 分钟 / 60 秒限流、登录日志（成功 / 失败 / IP / UA）、注册 / 登录分离、自定义用户名 ID 与社区号、7 天 JWT、401、发帖 1000 字 / 9 图限制、信息流倒序分页、点赞幂等、评论计数、转发引用、ZIP 安全解压（路径穿越 / 可执行文件 / 无 PDF / 体积限制 / 清理）、封面提取（PDF 渲染 + EPUB 内置封面）、下载计数、搜索分页 / 分类 / 中文、群聊鉴权 / 分组消息广播 / 在线统计 / 历史上翻 / 群切换、提案创建 / 列表 / 详情 / 校验、管理员注册同步创建社区账号、管理员群聊创建权限、管理员社区直接治理 / 普通用户无权、用户主页、热榜缓存、社区统计、组织两级密码、SQL 开发者高权限系统、举报处理、文章 / 图书 / 用户状态管理、封锁后内容隐藏与解除恢复。
 
-当前结果：**10 个测试文件 / 70 个用例全部通过**。
+当前结果：**10 个测试文件 / 73 个用例全部通过**。
 
 ### 2. 前端单元测试（Vitest + Vue Test Utils + happy-dom）
 
@@ -324,9 +356,9 @@ npm run e2e
 
 脚本会自行在 3101 / 5188 端口启动后端（临时 SQLite）与 Vite，使用无头 Edge 执行：
 
-登录守卫 → 邮箱验证码注册（自定义 ID / 社区号）→ 大字报/全宽无间隙布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（四栏无间隙布局、群列表切换、双用户实时消息、提案表单与右侧面板）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言 → 二级页面宽度 / 卡片内边距断言 → 提交举报 → 组织后台两级验证 → 查看举报并下架文章 → 后台封锁 / 解除封锁用户 → SQL 开发者系统（1111）高权限页面 → 举报弹窗内边距检查 → 提案栏最终展示。
+登录守卫 → 邮箱验证码注册（自定义 ID / 社区号）→ 大字报/全宽无间隙布局与配色断言 → 发帖 → 点赞 / 评论 / 转发 → ZIP 上传 PDF → 在线阅读 / 缩放 / 下载 → ZIP 上传 EPUB → epub.js 阅读 → 图书库分类 → 全局搜索 / Tab → 群聊（四栏无间隙布局、群列表切换、双用户实时消息、提案表单与右侧面板）→ 个人主页 → 修改昵称 / 上传头像 → 900px / 375px 响应式断言 → 二级页面宽度 / 卡片内边距断言 → 提交举报 → 组织后台两级验证 → 查看举报并下架文章 → 后台封锁 / 解除封锁用户 → SQL 开发者系统（1111）高权限页面 → 举报弹窗内边距检查 → 提案栏最终展示 → 管理员社区蓝色标识 → 管理员主页直接封禁入口 → 管理员图书下架按钮 → 管理员文章下架菜单 → 管理员后台创建群聊。
 
-当前结果：**20 张截图，0 页面异常，0 控制台错误**。
+当前结果：**25 张截图，0 页面异常，0 控制台错误**。
 
 截图与结果保存在 `e2e/screenshots/`（含 `e2e-result.json`）。
 
@@ -378,6 +410,7 @@ npm run build
 | GET | `/api/stats/online` | 在线用户 |
 | POST | `/api/admin/orgs/:orgCode/unlock` | 组织后台第一级系统密码验证（密码来自 SQL 系统设置） |
 | POST | `/api/admin/orgs/:orgCode/login` | 组织管理员个人密码登录，返回 2 小时管理员 JWT |
+| POST | `/api/admin/orgs/:orgCode/register` | 通过组织一级密码注册管理员，同时创建关联社区用户（`role=1`） |
 | POST | `/api/admin/sql/login` | SQL 开发者管理系统登录（默认 `1111`） |
 | GET | `/api/admin/me` | 当前管理员与组织信息 |
 | GET | `/api/admin/stats` | 后台统计 |
@@ -386,12 +419,16 @@ npm run build
 | GET/POST | `/api/admin/posts`、`/api/admin/posts/:id/status` | 文章管理 / 上下架 |
 | GET/POST | `/api/admin/books`、`/api/admin/books/:id/status` | 图书管理 / 上下架 |
 | GET/POST | `/api/admin/users`、`/api/admin/users/:id/status` | 用户管理 / 封锁 |
+| GET/POST | `/api/admin/chat-groups` | 管理员群聊列表 / 创建群聊（普通用户无权限） |
+| POST | `/api/moderation/posts/:id/status` | 管理员社区身份直接下架 / 恢复文章 |
+| POST | `/api/moderation/books/:id/status` | 管理员社区身份直接下架 / 恢复图书 |
+| POST | `/api/moderation/users/:id/status` | 管理员社区身份直接封禁 / 解封用户 |
 | GET | `/api/admin/orgs/:orgCode/public` | 组织入口公开信息 |
 | GET | `/api/admin/organizations` | SQL 开发者专属：组织列表 |
 | GET/POST | `/api/admin/organization-admins` | SQL 开发者专属：组织管理员列表 / 创建重置 |
 | GET/PUT | `/api/admin/settings`、`/api/admin/settings/:key` | SQL 开发者专属：系统设置（含组织一级密码） |
 
-Socket.IO：连接时 `auth.token` 携带 JWT；发送 `chat:send` `{ type: 1|2, content }`；接收 `chat:message`、`chat:online`、`chat:error`、`chat:ready`。
+Socket.IO：连接时 `auth.token` 携带 JWT；`chat:join` `{ groupId }` 加入群房间；发送 `chat:send` `{ type: 1|2, content, groupId }`；接收 `chat:message`、`chat:online`、`chat:error`、`chat:ready`。
 
 错误响应统一为 `{ "msg": "可读的错误原因" }` 与对应 HTTP 状态码。
 

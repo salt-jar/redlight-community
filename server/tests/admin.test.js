@@ -47,6 +47,29 @@ describe('组织与 SQL 开发者管理后台', () => {
     return response;
   }
 
+  async function communityLogin(email, purpose = 'login') {
+    const send = await ctx.agent.post('/api/auth/send-code').send({ email, purpose });
+    expect(send.status).toBe(200);
+    const login = await ctx.agent
+      .post('/api/auth/login')
+      .send({ email, code: send.body.devCode });
+    expect(login.status).toBe(200);
+    return login.body;
+  }
+
+  async function registerOrgAdmin(overrides = {}) {
+    const gate = await ctx.agent.post('/api/admin/orgs/001/unlock').send({ password: 'SQL' });
+    const payload = {
+      gateToken: gate.body.gateToken,
+      username: 'linked_admin',
+      password: 'Admin@12345',
+      displayName: '赤光管理员',
+      email: 'linked-admin@example.com',
+      ...overrides,
+    };
+    return ctx.agent.post('/api/admin/orgs/001/register').send(payload);
+  }
+
   it('组织入口、SQL 系统密码 + 个人密码与管理员登录态', async () => {
     await createAdmin();
     const publicOrg = await ctx.agent.get('/api/admin/orgs/001/public');
@@ -314,5 +337,91 @@ describe('组织与 SQL 开发者管理后台', () => {
     expect(missingTarget.status).toBe(404);
     const badType = await createReport(user.token, 'comment', post.id);
     expect(badType.status).toBe(400);
+  });
+
+  it('组织管理员注册时同步创建管理员社区用户，并可登录群聊', async () => {
+    const registered = await registerOrgAdmin();
+    expect(registered.status).toBe(201);
+    expect(registered.body.admin.userId).toBeTruthy();
+    expect(registered.body.admin.email).toBe('linked-admin@example.com');
+
+    const linkedUser = await ctx.deps.db.query('SELECT * FROM users WHERE email = ? LIMIT 1', [
+      'linked-admin@example.com',
+    ]);
+    expect(linkedUser).toHaveLength(1);
+    expect(Number(linkedUser[0].role)).toBe(1);
+    const adminRow = await ctx.deps.db.query("SELECT user_id FROM organization_admins WHERE username = 'linked_admin'");
+    expect(Number(adminRow[0].user_id)).toBe(Number(linkedUser[0].id));
+
+    const duplicate = await registerOrgAdmin();
+    expect(duplicate.status).toBe(409);
+
+    const community = await communityLogin('linked-admin@example.com');
+    expect(community.user.role).toBe(1);
+    const me = await ctx.agent.get('/api/auth/me').set('Authorization', `Bearer ${community.token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.user.role).toBe(1);
+  });
+
+  it('组织管理员可在后台创建群聊，普通用户不能创建', async () => {
+    const registered = await registerOrgAdmin();
+    const adminToken = registered.body.token;
+    const user = await ctx.register('group-normal@example.com');
+
+    const created = await ctx.agent
+      .post('/api/admin/chat-groups')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ name: '青年学习小组', description: '自动化测试创建' });
+    expect(created.status).toBe(201);
+    expect(created.body.group.name).toBe('青年学习小组');
+
+    const normalCreate = await ctx.agent
+      .post('/api/admin/chat-groups')
+      .set('Authorization', `Bearer ${user.token}`)
+      .send({ name: '普通用户不能创建的群' });
+    expect(normalCreate.status).toBe(401);
+
+    const groups = await ctx.agent.get('/api/admin/chat-groups').set('Authorization', `Bearer ${adminToken}`);
+    expect(groups.status).toBe(200);
+    expect(groups.body.list.some((group) => group.name === '青年学习小组')).toBe(true);
+
+    const publicGroups = await ctx.agent
+      .get('/api/chat/groups')
+      .set('Authorization', `Bearer ${user.token}`);
+    expect(publicGroups.body.list.some((group) => group.name === '青年学习小组')).toBe(true);
+  });
+
+  it('管理员社区账号可直接下架文章、封锁用户，普通用户无权操作', async () => {
+    const registered = await registerOrgAdmin();
+    expect(registered.status).toBe(201);
+    const adminCommunity = await communityLogin('linked-admin@example.com');
+    const normal = await ctx.register('moderation-normal@example.com');
+    const post = await ctx.createPost(normal.token, '管理员直接下架的测试文章');
+
+    const forbidden = await ctx.agent
+      .post(`/api/moderation/posts/${post.id}/status`)
+      .set('Authorization', `Bearer ${normal.token}`)
+      .send({ status: 0 });
+    expect(forbidden.status).toBe(403);
+
+    const removed = await ctx.agent
+      .post(`/api/moderation/posts/${post.id}/status`)
+      .set('Authorization', `Bearer ${adminCommunity.token}`)
+      .send({ status: 0 });
+    expect(removed.status).toBe(200);
+    expect((await ctx.agent.get(`/api/posts/${post.id}`)).status).toBe(404);
+
+    const blocked = await ctx.agent
+      .post(`/api/moderation/users/${normal.user.id}/status`)
+      .set('Authorization', `Bearer ${adminCommunity.token}`)
+      .send({ status: 0 });
+    expect(blocked.status).toBe(200);
+    expect((await ctx.agent.get('/api/auth/me').set('Authorization', `Bearer ${normal.token}`)).status).toBe(403);
+
+    await ctx.agent
+      .post(`/api/moderation/users/${normal.user.id}/status`)
+      .set('Authorization', `Bearer ${adminCommunity.token}`)
+      .send({ status: 1 });
+    expect((await ctx.agent.get('/api/auth/me').set('Authorization', `Bearer ${normal.token}`)).status).toBe(200);
   });
 });

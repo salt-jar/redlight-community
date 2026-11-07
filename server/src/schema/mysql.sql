@@ -140,11 +140,13 @@ CREATE TABLE IF NOT EXISTS organization_admins (
     password_hash VARCHAR(128) NOT NULL COMMENT 'scrypt 哈希',
     password_salt VARCHAR(64)  NOT NULL,
     display_name  VARCHAR(64)  DEFAULT '' COMMENT '显示名称',
+    user_id       BIGINT       NULL COMMENT '关联社区用户',
     status        TINYINT      DEFAULT 1 COMMENT '1启用 0停用',
     last_login_at DATETIME     NULL,
     created_at    DATETIME     DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_org_admin (org_code, username),
-    INDEX idx_org_admins_org (org_code)
+    INDEX idx_org_admins_org (org_code),
+    INDEX idx_org_admins_user (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织管理员';
 
 -- 系统设置（组织一级密码等，可通过 SQL 修改）

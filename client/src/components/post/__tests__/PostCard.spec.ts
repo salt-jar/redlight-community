@@ -1,4 +1,5 @@
 import { flushPromises, mount } from '@vue/test-utils';
+import { createPinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const apiMock = vi.hoisted(() => ({
@@ -34,6 +35,7 @@ function mountCard(overrides: Partial<Post> = {}) {
   return mount(PostCard, {
     props: { post: { ...basePost, ...overrides } },
     global: {
+      plugins: [createPinia()],
       stubs: {
         UserAvatar: true,
         PostImageGrid: true,

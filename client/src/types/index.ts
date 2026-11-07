@@ -7,6 +7,7 @@ export interface User {
   avatarUrl: string;
   bio: string;
   role?: number;
+  isAdmin?: boolean;
   createdAt?: string;
 }
 
@@ -15,6 +16,8 @@ export interface PostAuthor {
   nickname: string;
   avatarUrl: string;
   bio?: string;
+  role?: number;
+  isAdmin?: boolean;
 }
 
 export interface Repost {

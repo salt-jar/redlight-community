@@ -1,6 +1,7 @@
 import { loadConfig } from '../src/config.js';
 import { createDb } from '../src/db.js';
 import { hashPassword } from '../src/utils/password.js';
+import { ensureAdminCommunityUser } from '../src/services/adminAccounts.js';
 
 function parseArgs(argv) {
   const args = {};
@@ -20,9 +21,10 @@ const orgCode = String(args.org || '001').trim();
 const username = String(args.username || '').trim();
 const password = String(args.password || '');
 const displayName = String(args.name || '').trim() || username;
+const email = String(args.email || '').trim().toLowerCase();
 
 if (!/^[A-Za-z0-9_]{2,16}$/.test(orgCode)) {
-  console.error('用法：node scripts/create-org-admin.mjs --org 001 --username admin001 --password "至少8位密码" [--name "组织管理员"]');
+  console.error('用法：node scripts/create-org-admin.mjs --org 001 --username admin001 --password "至少8位密码" [--name "组织管理员"] [--email admin001@example.com]');
   process.exit(1);
 }
 if (!/^[A-Za-z0-9_\u4e00-\u9fa5]{2,32}$/.test(username)) {
@@ -48,6 +50,7 @@ try {
     }
   }
 
+  const user = await ensureAdminCommunityUser(db, { email, username, displayName, orgCode });
   const existing = await db.query(
     'SELECT id FROM organization_admins WHERE org_code = ? AND username = ? LIMIT 1',
     [orgCode, username],
@@ -55,17 +58,18 @@ try {
   const { salt, hash } = hashPassword(password);
   if (existing.length) {
     await db.query(
-      'UPDATE organization_admins SET password_hash = ?, password_salt = ?, display_name = ?, status = 1 WHERE id = ?',
-      [hash, salt, displayName, existing[0].id],
+      'UPDATE organization_admins SET password_hash = ?, password_salt = ?, display_name = ?, user_id = ?, status = 1 WHERE id = ?',
+      [hash, salt, displayName, Number(user.id), existing[0].id],
     );
     console.log(`已更新组织管理员：${orgCode} / ${username}（ID ${existing[0].id}）`);
   } else {
     const result = await db.query(
-      'INSERT INTO organization_admins (org_code, username, password_hash, password_salt, display_name) VALUES (?, ?, ?, ?, ?)',
-      [orgCode, username, hash, salt, displayName],
+      'INSERT INTO organization_admins (org_code, username, password_hash, password_salt, display_name, user_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [orgCode, username, hash, salt, displayName, Number(user.id)],
     );
     console.log(`已创建组织管理员：${orgCode} / ${username}（ID ${result.insertId}）`);
   }
+  console.log(`关联社区账号：${user.email} / @${user.username} / 昵称 ${user.nickname}`);
 } finally {
   await db.close();
 }

@@ -52,6 +52,8 @@ export function serializePublicUser(row) {
     communityNo: row.community_no || '',
     avatarUrl: row.avatar_url || '',
     bio: row.bio || '',
+    role: toNumber(row.role),
+    isAdmin: toNumber(row.role) === 1,
     createdAt: toIso(row.created_at),
   };
 }
@@ -140,6 +142,7 @@ export function serializeChatMessage(row) {
       id: toNumber(row.user_id),
       nickname: row.author_nickname || '',
       avatarUrl: row.author_avatar_url || '',
+      isAdmin: toNumber(row.author_role) === 1,
     },
   };
 }

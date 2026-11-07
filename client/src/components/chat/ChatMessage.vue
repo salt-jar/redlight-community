@@ -21,6 +21,7 @@ function openPreview(src: string) {
     <div class="msg-body">
       <div class="msg-meta">
         <span class="msg-name">{{ message.user.nickname }}</span>
+        <span v-if="message.user.isAdmin" class="admin-badge" data-testid="admin-badge">管理员</span>
         <span class="msg-time">{{ formatChatTime(message.createdAt) }}</span>
       </div>
       <div v-if="message.type === 2" class="msg-bubble image-bubble">
@@ -73,6 +74,17 @@ function openPreview(src: string) {
 
 .msg-name {
   font-size: 11px;
+}
+
+.admin-badge {
+  padding: 0 5px;
+  border: 1px solid #91caff;
+  border-radius: 3px;
+  background: #e6f4ff;
+  color: #1677ff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 14px;
 }
 
 .msg-bubble {

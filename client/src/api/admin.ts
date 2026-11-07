@@ -15,6 +15,8 @@ export interface AdminIdentity {
   displayName: string;
   scope: 'org' | 'sql';
   orgCode: string | null;
+  userId?: number | null;
+  email?: string;
 }
 
 export interface AdminSession {
@@ -97,6 +99,21 @@ export interface OrganizationAdminRow {
   displayName: string;
   status: number;
   lastLoginAt: string | null;
+  createdAt: string;
+  userId?: number | null;
+  userEmail?: string;
+  userNickname?: string;
+  userUsername?: string;
+  userCommunityNo?: string;
+}
+
+export interface AdminChatGroup {
+  id: number;
+  name: string;
+  description: string;
+  sortOrder: number;
+  status: number;
+  messageCount: number;
   createdAt: string;
 }
 
@@ -187,6 +204,18 @@ export async function apiOrgLogin(
   return data;
 }
 
+export async function apiOrgRegister(
+  code: string,
+  gateToken: string,
+  payload: { username: string; password: string; displayName: string; email: string },
+): Promise<AdminSession> {
+  const { data } = await adminHttp.post<AdminSession>(`/api/admin/orgs/${code}/register`, {
+    gateToken,
+    ...payload,
+  });
+  return data;
+}
+
 export async function apiSqlLogin(password: string): Promise<AdminSession> {
   const { data } = await adminHttp.post<AdminSession>('/api/admin/sql/login', { password });
   return data;
@@ -259,8 +288,19 @@ export async function apiAdminUpsertOrganizationAdmin(payload: {
   username: string;
   password: string;
   displayName?: string;
+  email?: string;
 }) {
   const { data } = await adminHttp.post('/api/admin/organization-admins', payload);
+  return data;
+}
+
+export async function apiAdminChatGroups() {
+  const { data } = await adminHttp.get<{ list: AdminChatGroup[] }>('/api/admin/chat-groups');
+  return data;
+}
+
+export async function apiAdminCreateChatGroup(payload: { name: string; description?: string }) {
+  const { data } = await adminHttp.post<{ group: AdminChatGroup }>('/api/admin/chat-groups', payload);
   return data;
 }
 

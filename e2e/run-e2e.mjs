@@ -151,6 +151,50 @@ async function apiLogin(email) {
   return loginBody;
 }
 
+async function apiCommunityLogin(email) {
+  const sendResponse = await fetch(`${serverBase}/api/auth/send-code`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email, purpose: 'login' }),
+  });
+  const sendBody = await sendResponse.json();
+  assert(sendResponse.ok, `管理员社区验证码发送失败：${JSON.stringify(sendBody)}`);
+  const loginResponse = await fetch(`${serverBase}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'user-agent': 'e2e-admin-user' },
+    body: JSON.stringify({ email, code: sendBody.devCode }),
+  });
+  const loginBody = await loginResponse.json();
+  assert(loginResponse.ok, `管理员社区登录失败：${JSON.stringify(loginBody)}`);
+  return loginBody;
+}
+
+async function apiRegisterAdmin() {
+  const suffix = String(Date.now()).slice(-6);
+  const unlock = await fetch(`${serverBase}/api/admin/orgs/001/unlock`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ password: 'SQL' }),
+  });
+  const unlockBody = await unlock.json();
+  assert(unlock.ok, `管理员组织验证失败：${JSON.stringify(unlockBody)}`);
+  const email = `e2e_admin_${suffix}@example.com`;
+  const register = await fetch(`${serverBase}/api/admin/orgs/001/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      gateToken: unlockBody.gateToken,
+      username: `e2e_admin_${suffix}`,
+      password: 'Admin@12345',
+      displayName: 'E2E 管理员',
+      email,
+    }),
+  });
+  const registerBody = await register.json();
+  assert(register.status === 201, `管理员注册失败：${JSON.stringify(registerBody)}`);
+  return { ...registerBody, email };
+}
+
 async function fillTestId(page, testId, value) {
   const root = page.locator(`[data-testid="${testId}"]`).first();
   await root.waitFor({ state: 'visible' });
@@ -843,6 +887,74 @@ async function main() {
   await waitForText(page.locator('[data-testid="proposal-mini"]'), '关于每周学习安排的 E2E 提案');
   await sleep(300);
   await shot(page, 'proposals');
+
+  log('检查管理员社区身份、蓝色标识、群聊创建与直接治理...');
+  const adminAccount = await apiRegisterAdmin();
+  const adminCommunity = await apiCommunityLogin(adminAccount.email);
+  assert(adminCommunity.user.role === 1, '组织管理员应同时拥有管理员社区账号');
+  const adminContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'zh-CN' });
+  await adminContext.addInitScript(
+    ({ token, user }) => {
+      localStorage.setItem('redlight_token', token);
+      localStorage.setItem('redlight_user', JSON.stringify(user));
+    },
+    { token: adminCommunity.token, user: adminCommunity.user },
+  );
+  const adminPage = await adminContext.newPage();
+  await adminPage.goto(`${webBase}/chat`, { waitUntil: 'networkidle' });
+  await waitForTestId(adminPage, 'chat-input');
+  await fillTestId(adminPage, 'chat-input', '管理员同志报到，群聊管理员标识测试。');
+  await adminPage.click('[data-testid="chat-send"]');
+  await waitForText(adminPage.locator('[data-testid="chat-messages"]'), '管理员同志报到');
+  await waitForTestId(adminPage, 'admin-badge');
+  await shot(adminPage, 'admin-chat-badge');
+
+  await adminPage.goto(`${webBase}/profile/${loginBody.user.id}`, { waitUntil: 'networkidle' });
+  await waitForTestId(adminPage, 'profile-card');
+  assert(await adminPage.locator('[data-testid="admin-block-profile"]').isVisible(), '管理员应在社区主页直接看到封禁按钮');
+  await shot(adminPage, 'admin-direct-moderation');
+
+  await adminPage.goto(`${webBase}/books/${uploadedBody.book.id}`, { waitUntil: 'networkidle' });
+  await waitForTestId(adminPage, 'book-detail');
+  assert(await adminPage.locator('[data-testid="admin-remove-book"]').isVisible(), '管理员应看到直接下架图书按钮');
+  await shot(adminPage, 'admin-book-moderation');
+
+  const adminDemoPost = await fetch(`${serverBase}/api/posts`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', Authorization: `Bearer ${adminCommunity.token}` },
+    body: JSON.stringify({ content: '管理员直接治理菜单演示帖。', images: [] }),
+  });
+  assert(adminDemoPost.ok, `管理员演示帖发布失败：${adminDemoPost.status}`);
+
+  await adminPage.goto(webBase, { waitUntil: 'networkidle' });
+  await adminPage.waitForSelector('[data-testid="feed"] .post-card');
+  await adminPage.locator('.post-card .more-btn').first().click();
+  await adminPage.waitForSelector('.ant-dropdown:not(.ant-dropdown-hidden)');
+  await waitForText(adminPage.locator('.ant-dropdown:not(.ant-dropdown-hidden)'), '管理员下架文章');
+  await shot(adminPage, 'admin-post-menu');
+
+  const orgContext = await browser.newContext({ viewport: { width: 1280, height: 900 }, locale: 'zh-CN' });
+  await orgContext.addInitScript(
+    ({ token, admin, organization }) => {
+      sessionStorage.setItem('redlight_admin_token', token);
+      sessionStorage.setItem('redlight_admin_session', JSON.stringify({ admin, organization }));
+    },
+    { token: adminAccount.token, admin: adminAccount.admin, organization: adminAccount.organization },
+  );
+  const orgPage = await orgContext.newPage();
+  await orgPage.goto(`${webBase}/org/001`, { waitUntil: 'networkidle' });
+  await waitForTestId(orgPage, 'admin-dashboard');
+  await orgPage.getByRole('tab', { name: /群聊管理/ }).click();
+  await waitForTestId(orgPage, 'admin-group-name');
+  const groupName = `E2E 青年学习 ${String(Date.now()).slice(-4)}`;
+  await fillTestId(orgPage, 'admin-group-name', groupName);
+  await fillTestId(orgPage, 'admin-group-description', '由组织管理员创建，普通用户无创建权限');
+  await orgPage.click('[data-testid="admin-group-submit"]');
+  await waitForText(orgPage.locator('[data-testid="admin-chat-groups"]'), groupName);
+  await sleep(300);
+  await shot(orgPage, 'admin-groups');
+  await adminContext.close();
+  await orgContext.close();
 
   assert(pageErrors.length === 0, `页面存在未捕获异常：${pageErrors.join(' | ')}`);
   const relevantConsoleErrors = consoleErrors.filter(

@@ -1,21 +1,46 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ArrowLeftOutlined, DownloadOutlined, FlagOutlined, ReadOutlined } from '@ant-design/icons-vue';
+import { message, Modal } from 'ant-design-vue';
 import AppShell from '@/components/layout/AppShell.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import ReportDialog from '@/components/common/ReportDialog.vue';
 import { apiGetBook, bookDownloadUrl } from '@/api/books';
+import { apiModerateBook } from '@/api/moderation';
 import { apiErrorMessage } from '@/api/http';
+import { useAuthStore } from '@/stores/auth';
 import type { Book } from '@/types';
 import { formatCount, formatDate, formatFileSize } from '@/utils/format';
 
 const route = useRoute();
 const router = useRouter();
+const auth = useAuthStore();
 const book = ref<Book | null>(null);
 const loading = ref(true);
 const reportOpen = ref(false);
 const error = ref('');
+const isAdmin = computed(() => Number(auth.user?.role) === 1);
+
+function adminRemoveBook() {
+  if (!book.value) return;
+  Modal.confirm({
+    title: '管理员下架图书',
+    content: `确认直接下架《${book.value.title}》？普通用户将无法阅读和下载。`,
+    okText: '确认下架',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await apiModerateBook(book.value!.id, 0);
+        message.success('图书已下架');
+        router.push('/books');
+      } catch (err) {
+        message.error(apiErrorMessage(err));
+      }
+    },
+  });
+}
 
 async function load() {
   loading.value = true;
@@ -102,6 +127,15 @@ onMounted(load);
             <button class="download-btn report-btn" type="button" data-testid="report-book" @click="reportOpen = true">
               <FlagOutlined />
               举报
+            </button>
+            <button
+              v-if="isAdmin"
+              class="download-btn report-btn admin-remove-btn"
+              type="button"
+              data-testid="admin-remove-book"
+              @click="adminRemoveBook"
+            >
+              管理员下架
             </button>
           </div>
 
@@ -277,6 +311,13 @@ onMounted(load);
 .report-btn:hover {
   border-color: var(--rl-primary);
   color: var(--rl-primary);
+}
+
+.admin-remove-btn {
+  border-color: #ffccc7;
+  background: #fff1f0;
+  color: #cf1322;
+  font-weight: 600;
 }
 
 .download-btn:hover {

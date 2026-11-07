@@ -8,13 +8,15 @@ import {
   MessageOutlined,
   RetweetOutlined,
 } from '@ant-design/icons-vue';
-import { message } from 'ant-design-vue';
+import { message, Modal } from 'ant-design-vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import PostImageGrid from './PostImageGrid.vue';
 import CommentList from './CommentList.vue';
 import ReportDialog from '@/components/common/ReportDialog.vue';
 import { apiLikePost, apiRepost } from '@/api/posts';
+import { apiModeratePost } from '@/api/moderation';
 import { apiErrorMessage } from '@/api/http';
+import { useAuthStore } from '@/stores/auth';
 import type { Post } from '@/types';
 import { formatCount, timeAgo } from '@/utils/format';
 import { renderRichText } from '@/utils/richText';
@@ -24,6 +26,8 @@ const props = defineProps<{ post: Post }>();
 const emit = defineEmits<{ (event: 'reposted', post: Post): void }>();
 
 const router = useRouter();
+const auth = useAuthStore();
+const isAdmin = computed(() => Number(auth.user?.role) === 1);
 const liked = ref(props.post.liked);
 const likeCount = ref(props.post.likeCount);
 const commentCount = ref(props.post.commentCount);
@@ -91,6 +95,24 @@ function onMoreClick(info: { key: string | number }) {
   if (key === 'report') reportOpen.value = true;
   else if (key === 'uninterested') message.info('将减少展示此类内容');
   else if (key === 'favorite') message.info('已收藏（演示功能）');
+  else if (key === 'admin_remove_post') {
+    Modal.confirm({
+      title: '管理员下架文章',
+      content: '确认直接下架这篇文章？普通用户将无法再看到。',
+      okText: '确认下架',
+      okType: 'danger',
+      cancelText: '取消',
+      async onOk() {
+        try {
+          await apiModeratePost(props.post.id, 0);
+          message.success('文章已下架');
+          window.location.reload();
+        } catch (error) {
+          message.error(apiErrorMessage(error));
+        }
+      },
+    });
+  }
 }
 
 function goProfile(userId: number) {
@@ -165,6 +187,7 @@ function goProfile(userId: number) {
         <template #overlay>
           <a-menu @click="onMoreClick">
             <a-menu-item key="report">举报</a-menu-item>
+            <a-menu-item v-if="isAdmin" key="admin_remove_post" danger>管理员下架文章</a-menu-item>
             <a-menu-item key="uninterested">不感兴趣</a-menu-item>
             <a-menu-item key="favorite">收藏</a-menu-item>
           </a-menu>

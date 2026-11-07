@@ -9,6 +9,7 @@ import {
   FlagOutlined,
   LockOutlined,
   LogoutOutlined,
+  MessageOutlined,
   SafetyCertificateOutlined,
   SearchOutlined,
   SettingOutlined,
@@ -20,6 +21,8 @@ import { message, Modal } from 'ant-design-vue';
 import { apiErrorMessage } from '@/api/http';
 import {
   apiAdminBooks,
+  apiAdminChatGroups,
+  apiAdminCreateChatGroup,
   apiAdminMe,
   apiAdminOrganizationAdmins,
   apiAdminOrganizations,
@@ -35,6 +38,7 @@ import {
   apiAdminUpsertOrganizationAdmin,
   apiAdminUsers,
   apiOrgLogin,
+  apiOrgRegister,
   apiOrganization,
   apiOrgUnlock,
   apiSqlLogin,
@@ -43,6 +47,7 @@ import {
   getAdminToken,
   saveAdminSession,
   type AdminBook,
+  type AdminChatGroup,
   type AdminIdentity,
   type AdminOrganization,
   type AdminOrganizationRow,
@@ -56,7 +61,7 @@ import {
 
 type PortalMode = 'org' | 'sql';
 type Phase = 'loading' | 'gate' | 'login' | 'dashboard' | 'error';
-type TabKey = 'reports' | 'posts' | 'books' | 'users' | 'organizations' | 'settings';
+type TabKey = 'reports' | 'posts' | 'books' | 'users' | 'groups' | 'organizations' | 'settings';
 
 const route = useRoute();
 const mode = computed<PortalMode>(() => (route.name === 'sql-admin' ? 'sql' : 'org'));
@@ -71,6 +76,10 @@ const gateLoading = ref(false);
 const loginUsername = ref('');
 const loginPassword = ref('');
 const loginLoading = ref(false);
+const authMode = ref<'login' | 'register'>('login');
+const registerEmail = ref('');
+const registerDisplayName = ref('');
+const registerLoading = ref(false);
 const authError = ref('');
 const pageError = ref('');
 
@@ -117,8 +126,11 @@ const userPageSize = 10;
 const organizations = ref<AdminOrganizationRow[]>([]);
 const orgAdmins = ref<OrganizationAdminRow[]>([]);
 const settings = ref<SystemSettingRow[]>([]);
+const chatGroups = ref<AdminChatGroup[]>([]);
+const chatGroupsLoading = ref(false);
+const groupForm = ref({ name: '', description: '' });
 const developerLoading = ref(false);
-const orgAdminForm = ref({ orgCode: '001', username: '', password: '', displayName: '' });
+const orgAdminForm = ref({ orgCode: '001', username: '', password: '', displayName: '', email: '' });
 const settingDraft = ref<Record<string, string>>({});
 
 const tabLabel = computed(() => {
@@ -127,6 +139,7 @@ const tabLabel = computed(() => {
     posts: '文章管理',
     books: '图书管理',
     users: '用户管理',
+    groups: '群聊管理',
     organizations: '组织管理',
     settings: '系统设置',
   };
@@ -239,6 +252,34 @@ async function loadDeveloperData() {
   }
 }
 
+async function loadChatGroups() {
+  chatGroupsLoading.value = true;
+  try {
+    const result = await apiAdminChatGroups();
+    chatGroups.value = result.list;
+  } catch (error) {
+    if (!handleAuthError(error)) message.error(apiErrorMessage(error));
+  } finally {
+    chatGroupsLoading.value = false;
+  }
+}
+
+async function submitChatGroup() {
+  const name = groupForm.value.name.trim();
+  if (name.length < 2) {
+    message.error('请填写群聊名称（至少 2 个字符）');
+    return;
+  }
+  try {
+    await apiAdminCreateChatGroup({ name, description: groupForm.value.description.trim() });
+    message.success('群聊已创建');
+    groupForm.value = { name: '', description: '' };
+    await loadChatGroups();
+  } catch (error) {
+    if (!handleAuthError(error)) message.error(apiErrorMessage(error));
+  }
+}
+
 async function loadInitial() {
   await Promise.all([
     loadStats(),
@@ -272,6 +313,9 @@ async function init() {
   gatePassword.value = '';
   loginUsername.value = '';
   loginPassword.value = '';
+  authMode.value = 'login';
+  registerEmail.value = '';
+  registerDisplayName.value = '';
   activeTab.value = 'reports';
 
   const saved = sessionMatches();
@@ -370,12 +414,51 @@ async function submitLogin() {
   }
 }
 
+async function submitRegister() {
+  if (!loginUsername.value.trim() || !loginPassword.value || !registerEmail.value.trim()) {
+    authError.value = '请填写管理员账号、密码和关联社区邮箱';
+    return;
+  }
+  if (loginPassword.value.length < 8) {
+    authError.value = '个人登录密码至少 8 位';
+    return;
+  }
+  if (!gateToken.value) {
+    phase.value = 'gate';
+    authError.value = '组织验证已过期，请重新输入系统密码';
+    return;
+  }
+  registerLoading.value = true;
+  authError.value = '';
+  try {
+    const session = await apiOrgRegister(orgCode.value, gateToken.value, {
+      username: loginUsername.value.trim(),
+      password: loginPassword.value,
+      displayName: registerDisplayName.value.trim() || loginUsername.value.trim(),
+      email: registerEmail.value.trim(),
+    });
+    saveAdminSession(session);
+    admin.value = session.admin;
+    organization.value = session.organization;
+    loginPassword.value = '';
+    phase.value = 'dashboard';
+    await loadInitial();
+  } catch (error) {
+    authError.value = apiErrorMessage(error);
+  } finally {
+    registerLoading.value = false;
+  }
+}
+
 function logout() {
   clearAdminSession();
   admin.value = null;
   gateToken.value = '';
   loginUsername.value = '';
   loginPassword.value = '';
+  authMode.value = 'login';
+  registerEmail.value = '';
+  registerDisplayName.value = '';
   authError.value = '';
   phase.value = 'gate';
 }
@@ -385,6 +468,7 @@ function onTabChange(key: string | number) {
   if (key === 'posts' && !posts.value.length) void loadPosts();
   if (key === 'books' && !books.value.length) void loadBooks();
   if (key === 'users' && !users.value.length) void loadUsers();
+  if (key === 'groups' && !chatGroups.value.length) void loadChatGroups();
   if ((key === 'organizations' || key === 'settings') && isDeveloper.value) void loadDeveloperData();
 }
 
@@ -527,9 +611,10 @@ async function submitOrgAdmin() {
       username: form.username.trim(),
       password: form.password,
       displayName: form.displayName.trim(),
+      email: form.email.trim(),
     });
-    message.success(result.updated ? '组织管理员已更新' : '组织管理员已创建');
-    orgAdminForm.value = { orgCode: '001', username: '', password: '', displayName: '' };
+    message.success(result.updated ? '组织管理员已更新，并关联社区账号' : '组织管理员已创建，并同步创建社区账号');
+    orgAdminForm.value = { orgCode: '001', username: '', password: '', displayName: '', email: '' };
     await loadDeveloperData();
   } catch (error) {
     if (!handleAuthError(error)) message.error(apiErrorMessage(error));
@@ -621,8 +706,18 @@ watch([() => route.name, orgCode], init);
 
         <div v-else class="auth-body" data-testid="admin-login">
           <span class="auth-icon"><SafetyCertificateOutlined /></span>
-          <h2>第二级 · 组织管理员验证</h2>
-          <p class="auth-desc">系统密码已通过。请输入「{{ organization?.name }}」的组织管理员个人账号和密码。</p>
+          <h2>{{ authMode === 'register' ? '注册组织管理员' : '第二级 · 组织管理员验证' }}</h2>
+          <p class="auth-desc">
+            {{ authMode === 'register'
+              ? '注册管理员时会同时创建同邮箱的社区用户账号，群聊中显示蓝色「管理员」标识。'
+              : `系统密码已通过。请输入「${organization?.name}」的组织管理员个人账号和密码。` }}
+          </p>
+
+          <div class="auth-mode-switch">
+            <button type="button" :class="{ active: authMode === 'login' }" @click="authMode = 'login'; authError = ''">管理员登录</button>
+            <button type="button" :class="{ active: authMode === 'register' }" @click="authMode = 'register'; authError = ''">注册管理员</button>
+          </div>
+
           <label class="auth-field">
             <span>管理员账号</span>
             <a-input
@@ -635,20 +730,58 @@ watch([() => route.name, orgCode], init);
               <template #prefix><UserOutlined /></template>
             </a-input>
           </label>
+          <label v-if="authMode === 'register'" class="auth-field">
+            <span>显示名称</span>
+            <a-input
+              v-model:value="registerDisplayName"
+              size="large"
+              placeholder="群聊中显示的昵称"
+              data-testid="admin-register-display"
+            />
+          </label>
+          <label v-if="authMode === 'register'" class="auth-field">
+            <span>关联社区邮箱</span>
+            <a-input
+              v-model:value="registerEmail"
+              size="large"
+              type="email"
+              placeholder="用于登录社区和群聊"
+              data-testid="admin-register-email"
+            />
+          </label>
           <label class="auth-field">
             <span>个人登录密码</span>
             <a-input-password
               v-model:value="loginPassword"
               size="large"
-              placeholder="请输入个人登录密码"
-              autocomplete="current-password"
+              :placeholder="authMode === 'register' ? '设置个人登录密码，至少 8 位' : '请输入个人登录密码'"
+              :autocomplete="authMode === 'register' ? 'new-password' : 'current-password'"
               data-testid="admin-password"
-              @press-enter="submitLogin"
+              @press-enter="authMode === 'login' ? submitLogin() : submitRegister()"
             />
           </label>
           <p v-if="authError" class="auth-error" data-testid="admin-auth-error">{{ authError }}</p>
-          <a-button type="primary" size="large" block :loading="loginLoading" data-testid="admin-login-submit" @click="submitLogin">
+          <a-button
+            v-if="authMode === 'login'"
+            type="primary"
+            size="large"
+            block
+            :loading="loginLoading"
+            data-testid="admin-login-submit"
+            @click="submitLogin"
+          >
             进入组织管理后台
+          </a-button>
+          <a-button
+            v-else
+            type="primary"
+            size="large"
+            block
+            :loading="registerLoading"
+            data-testid="admin-register-submit"
+            @click="submitRegister"
+          >
+            创建管理员并关联社区账号
           </a-button>
           <button class="auth-back" type="button" @click="phase = 'gate'; authError = ''">返回上一步</button>
         </div>
@@ -876,6 +1009,33 @@ watch([() => route.name, orgCode], init);
                 <a-pagination v-if="userTotal > userPageSize" class="admin-pagination" :current="userPage" :total="userTotal" :page-size="userPageSize" :show-size-changer="false" @change="onUserPage" />
               </a-spin>
             </a-tab-pane>
+
+            <a-tab-pane key="groups">
+              <template #tab><MessageOutlined /> 群聊管理</template>
+              <a-spin :spinning="chatGroupsLoading">
+                <div class="panel-toolbar">
+                  <div class="panel-heading"><h3>群聊列表</h3><span>共 {{ chatGroups.length }} 个群</span></div>
+                </div>
+                <div class="admin-empty" v-if="!chatGroups.length">还没有群聊，创建第一个群聊。</div>
+                <div class="dev-org-list" v-else data-testid="admin-chat-groups">
+                  <div v-for="group in chatGroups" :key="group.id" class="dev-org-card">
+                    <strong>{{ group.name }}</strong>
+                    <span>#{{ group.id }} · {{ group.messageCount }} 条消息 · {{ group.status === 1 ? '启用' : '停用' }}</span>
+                    <span>{{ group.description || '暂无群说明' }}</span>
+                  </div>
+                </div>
+                <div class="dev-form">
+                  <h4>创建群聊</h4>
+                  <p class="settings-tip">只有管理员可以创建群聊，普通用户无法调用该接口。</p>
+                  <div class="dev-form-grid">
+                    <a-input v-model:value="groupForm.name" maxlength="32" placeholder="群聊名称，如 青年学习小组" data-testid="admin-group-name" />
+                    <a-input v-model:value="groupForm.description" maxlength="255" placeholder="群聊说明（可选）" data-testid="admin-group-description" />
+                  </div>
+                  <a-button type="primary" ghost data-testid="admin-group-submit" @click="submitChatGroup">创建群聊</a-button>
+                </div>
+              </a-spin>
+            </a-tab-pane>
+
             <a-tab-pane v-if="isDeveloper" key="organizations">
               <template #tab><DatabaseOutlined /> 组织管理</template>
               <a-spin :spinning="developerLoading">
@@ -894,6 +1054,8 @@ watch([() => route.name, orgCode], init);
                         <span>@{{ item.username }}</span>
                         <span>组织 {{ item.orgCode }}</span>
                         <span>最后登录：{{ formatTime(item.lastLoginAt) }}</span>
+                        <span v-if="item.userEmail">关联用户：{{ item.userNickname || item.userUsername }} · {{ item.userEmail }}</span>
+                        <span v-else>未关联社区用户</span>
                       </div>
                     </div>
                     <span class="status-tag" :class="item.status === 1 ? 'ok' : 'off'">{{ item.status === 1 ? '启用' : '停用' }}</span>
@@ -906,6 +1068,7 @@ watch([() => route.name, orgCode], init);
                     <a-input v-model:value="orgAdminForm.orgCode" placeholder="组织编号，如 001" />
                     <a-input v-model:value="orgAdminForm.username" placeholder="管理员账号" />
                     <a-input v-model:value="orgAdminForm.displayName" placeholder="显示名称" />
+                    <a-input v-model:value="orgAdminForm.email" placeholder="关联社区邮箱（可选）" />
                     <a-input-password v-model:value="orgAdminForm.password" placeholder="个人密码，至少 8 位" />
                   </div>
                   <a-button type="primary" ghost @click="submitOrgAdmin">保存组织管理员</a-button>
@@ -1160,6 +1323,35 @@ watch([() => route.name, orgCode], init);
 .auth-field {
   display: block;
   margin-bottom: 14px;
+}
+
+.auth-mode-switch {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  padding: 3px;
+  border: 1px solid var(--rl-border);
+  border-radius: 7px;
+  background: #f7f4ef;
+}
+
+.auth-mode-switch button {
+  flex: 1;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--rl-text-secondary);
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.auth-mode-switch button.active {
+  background: #fff;
+  color: var(--rl-primary);
+  box-shadow: 0 1px 4px rgba(80, 40, 20, 0.08);
+  font-weight: 600;
 }
 
 .auth-field > span {

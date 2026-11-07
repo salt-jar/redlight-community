@@ -2,13 +2,14 @@
 import { computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { CalendarOutlined, CopyOutlined, EditOutlined, FileTextOutlined } from '@ant-design/icons-vue';
-import { message } from 'ant-design-vue';
+import { message, Modal } from 'ant-design-vue';
 import AppShell from '@/components/layout/AppShell.vue';
 import PostCard from '@/components/post/PostCard.vue';
 import PostSkeleton from '@/components/skeleton/PostSkeleton.vue';
 import EmptyState from '@/components/common/EmptyState.vue';
 import UserAvatar from '@/components/common/UserAvatar.vue';
 import { apiGetProfile } from '@/api/users';
+import { apiModerateUser } from '@/api/moderation';
 import { apiErrorMessage } from '@/api/http';
 import { useAuthStore } from '@/stores/auth';
 import { useUiStore } from '@/stores/ui';
@@ -29,6 +30,27 @@ const loadingMore = ref(false);
 const error = ref('');
 
 const isSelf = computed(() => Boolean(user.value && auth.user && user.value.id === auth.user.id));
+const canModerate = computed(() => Number(auth.user?.role) === 1 && Boolean(user.value) && !isSelf.value);
+
+function adminBlockUser() {
+  if (!user.value) return;
+  Modal.confirm({
+    title: '管理员封禁用户',
+    content: `确认直接封禁「${user.value.nickname}」？封禁后该用户无法登录、发言，内容也会隐藏。`,
+    okText: '确认封禁',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await apiModerateUser(user.value!.id, 0);
+        message.success('用户已封禁');
+        window.location.reload();
+      } catch (err) {
+        message.error(apiErrorMessage(err));
+      }
+    },
+  });
+}
 
 async function copyText(value: string, label: string) {
   if (!value) return;
@@ -148,6 +170,15 @@ watch(
           >
             <EditOutlined />
             编辑资料
+          </button>
+          <button
+            v-if="canModerate"
+            class="edit-profile-btn admin-block-btn"
+            type="button"
+            data-testid="admin-block-profile"
+            @click="adminBlockUser"
+          >
+            封禁此用户
           </button>
         </div>
         <div class="profile-stat">
@@ -333,6 +364,14 @@ watch(
 
 .edit-profile-btn:hover {
   background: #fff1f0;
+}
+
+.admin-block-btn {
+  margin-left: 6px;
+  border-color: #ffccc7;
+  background: #fff1f0;
+  color: #cf1322;
+  font-weight: 600;
 }
 
 .profile-stat {
