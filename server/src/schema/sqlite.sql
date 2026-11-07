@@ -88,29 +88,35 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_chat_messages_created_at ON chat_messages(created_at DESC);
 
--- 门店（管理后台租户）
-CREATE TABLE IF NOT EXISTS stores (
-    id            INTEGER PRIMARY KEY,
+-- 组织（如 001）
+CREATE TABLE IF NOT EXISTS organizations (
+    code          TEXT    PRIMARY KEY,
     name          TEXT    NOT NULL,
     status        INTEGER DEFAULT 1,
     created_at    TEXT    DEFAULT CURRENT_TIMESTAMP
 );
 
--- 门店管理员（二级个人密码）
-CREATE TABLE IF NOT EXISTS store_admins (
+-- 组织管理员（个人二级密码）
+CREATE TABLE IF NOT EXISTS organization_admins (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    store_id      INTEGER NOT NULL,
+    org_code      TEXT    NOT NULL,
     username      TEXT    NOT NULL,
     password_hash TEXT    NOT NULL,
     password_salt TEXT    NOT NULL,
     display_name  TEXT    DEFAULT '',
-    role          INTEGER DEFAULT 1,
     status        INTEGER DEFAULT 1,
     last_login_at TEXT    NULL,
     created_at    TEXT    DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE (store_id, username)
+    UNIQUE (org_code, username)
 );
-CREATE INDEX IF NOT EXISTS idx_store_admins_store ON store_admins(store_id);
+CREATE INDEX IF NOT EXISTS idx_org_admins_org ON organization_admins(org_code);
+
+-- 系统设置（组织一级密码等，可通过 SQL 修改）
+CREATE TABLE IF NOT EXISTS system_settings (
+    setting_key   TEXT    PRIMARY KEY,
+    value         TEXT    NOT NULL,
+    updated_at    TEXT    DEFAULT CURRENT_TIMESTAMP
+);
 
 -- 举报（全站队列）
 CREATE TABLE IF NOT EXISTS reports (

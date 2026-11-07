@@ -3,7 +3,7 @@ import jwt from 'jsonwebtoken';
 import { asyncHandler, parsePagination } from '../utils/http.js';
 import { HttpError } from '../utils/errors.js';
 import { createAdminGuard } from '../middleware/adminAuth.js';
-import { verifyPassword, safeCompare } from '../utils/password.js';
+import { verifyPassword, safeCompare, hashPassword } from '../utils/password.js';
 import { serializeBook, serializePublicUser, toIso } from '../utils/serialize.js';
 
 const REPORT_REASONS = new Set(['违法违规', '色情低俗', '侵权盗版', '垃圾广告', '人身攻击', '其他']);
@@ -38,28 +38,47 @@ async function recordAdminFailure(cache, key, count) {
 }
 
 /**
- * 管理员后台 API。
- * 当前社区内容为全站共享，门店用于隔离管理员账号与登录入口；
- * 举报队列、文章、图书、用户管理均为全站范围。
+ * 管理后台 API。
+ * - /org/001：组织管理员，一级系统密码来自 SQL system_settings，二级个人密码。
+ * - /sql：面向开发者的 SQL 管理系统，单密码，权限更高，可管理组织、管理员和系统设置。
+ * 社区内容与举报队列为全站共享。
  */
 export function createAdminRouter({ db, config, cache, adminGuard }) {
   const router = express.Router();
   const authGuard = adminGuard || createAdminGuard(config, db);
 
-  function signGateToken(storeId) {
-    return jwtSign({ type: 'admin-gate', storeId }, config.jwtSecret, '10m');
+  function normalizeOrgCode(value) {
+    const code = String(value || '').trim();
+    if (!/^[A-Za-z0-9_]{2,16}$/.test(code)) throw new HttpError(404, '组织不存在或已停用');
+    return code;
   }
 
-  async function getStore(storeId) {
-    const id = parseId(storeId, '门店');
-    const rows = await db.query('SELECT * FROM stores WHERE id = ? AND status = 1 LIMIT 1', [id]);
-    if (!rows.length) throw new HttpError(404, '门店不存在或已停用');
+  function signGateToken(orgCode) {
+    return jwtSign({ type: 'admin-gate', scope: 'org', orgCode }, config.jwtSecret, '10m');
+  }
+
+  async function getOrg(orgCode) {
+    const code = normalizeOrgCode(orgCode);
+    const rows = await db.query('SELECT * FROM organizations WHERE code = ? AND status = 1 LIMIT 1', [code]);
+    if (!rows.length) throw new HttpError(404, '组织不存在或已停用');
     return rows[0];
   }
 
+  async function getOrgGatePassword(orgCode) {
+    const rows = await db.query('SELECT value FROM system_settings WHERE setting_key = ? LIMIT 1', [
+      `org.${orgCode}.gate_password`,
+    ]);
+    if (!rows.length) throw new HttpError(503, '组织一级系统密码尚未配置，请先在系统设置中设置');
+    return String(rows[0].value);
+  }
+
   async function getAdminById(id) {
-    const rows = await db.query('SELECT * FROM store_admins WHERE id = ? AND status = 1 LIMIT 1', [id]);
+    const rows = await db.query('SELECT * FROM organization_admins WHERE id = ? AND status = 1 LIMIT 1', [id]);
     return rows[0] || null;
+  }
+
+  function requireDeveloper(req) {
+    if (!req.isDeveloper) throw new HttpError(403, '仅 SQL 开发者系统可执行该操作');
   }
 
   async function getReport(id) {
@@ -146,43 +165,44 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
     };
   }
 
-  // 门店信息（进入后台前展示）
+  // 组织信息（进入后台前展示）
   router.get(
-    '/stores/:storeId/public',
+    '/orgs/:orgCode/public',
     asyncHandler(async (req, res) => {
-      const store = await getStore(req.params.storeId);
-      res.json({ store: { id: Number(store.id), name: store.name } });
+      const org = await getOrg(req.params.orgCode);
+      res.json({ organization: { code: org.code, name: org.name } });
     }),
   );
 
-  // 第一级：统一管理密码
+  // 组织第一级：系统设置密码（由 SQL system_settings 配置）
   router.post(
-    '/gate',
+    '/orgs/:orgCode/unlock',
     asyncHandler(async (req, res) => {
-      const store = await getStore(req.body?.storeId);
+      const org = await getOrg(req.params.orgCode);
       const password = String(req.body?.password || '');
-      if (!password) throw new HttpError(400, '请输入统一管理密码');
-      const attemptKey = `admin:gate:${requestIp(req)}`;
+      if (!password) throw new HttpError(400, '请输入组织系统密码');
+      const attemptKey = `admin:org-gate:${requestIp(req)}:${org.code}`;
       const attempts = await checkAdminAttempts(cache, attemptKey);
-      if (!safeCompare(password, config.adminGatePassword)) {
+      const expected = await getOrgGatePassword(org.code);
+      if (!safeCompare(password, expected)) {
         await recordAdminFailure(cache, attemptKey, attempts);
-        throw new HttpError(403, '统一管理密码错误');
+        throw new HttpError(403, '组织系统密码错误');
       }
       await cache.del(attemptKey);
       res.json({
         success: true,
-        gateToken: signGateToken(Number(store.id)),
+        gateToken: signGateToken(org.code),
         expiresIn: 600,
-        store: { id: Number(store.id), name: store.name },
+        organization: { code: org.code, name: org.name },
       });
     }),
   );
 
-  // 第二级：门店管理员个人账号密码
+  // 组织第二级：个人管理员账号密码
   router.post(
-    '/login',
+    '/orgs/:orgCode/login',
     asyncHandler(async (req, res) => {
-      const storeId = parseId(req.body?.storeId, '门店');
+      const orgCode = normalizeOrgCode(req.params.orgCode);
       const gateToken = String(req.body?.gateToken || '');
       const username = String(req.body?.username || '').trim();
       const password = String(req.body?.password || '');
@@ -192,17 +212,17 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
       try {
         gatePayload = jwtVerify(gateToken, config.jwtSecret);
       } catch {
-        throw new HttpError(401, '管理验证已过期，请重新输入统一密码');
+        throw new HttpError(401, '组织验证已过期，请重新输入系统密码');
       }
-      if (gatePayload.type !== 'admin-gate' || Number(gatePayload.storeId) !== storeId) {
-        throw new HttpError(401, '管理验证无效，请重新进入');
+      if (gatePayload.type !== 'admin-gate' || gatePayload.scope !== 'org' || gatePayload.orgCode !== orgCode) {
+        throw new HttpError(401, '组织验证无效，请重新进入');
       }
 
-      const attemptKey = `admin:login:${requestIp(req)}:${storeId}`;
+      const attemptKey = `admin:org-login:${requestIp(req)}:${orgCode}`;
       const attempts = await checkAdminAttempts(cache, attemptKey);
       const rows = await db.query(
-        'SELECT * FROM store_admins WHERE store_id = ? AND username = ? AND status = 1 LIMIT 1',
-        [storeId, username],
+        'SELECT * FROM organization_admins WHERE org_code = ? AND username = ? AND status = 1 LIMIT 1',
+        [orgCode, username],
       );
       const admin = rows[0];
       if (!admin || !verifyPassword(password, admin.password_salt, admin.password_hash)) {
@@ -211,18 +231,55 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
       }
       await cache.del(attemptKey);
 
-      const store = await getStore(storeId);
-      await db.query('UPDATE store_admins SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [admin.id]);
-      const token = jwtSign({ type: 'admin', adminId: Number(admin.id), storeId }, config.jwtSecret, config.adminTokenExpiresIn || '2h');
+      const org = await getOrg(orgCode);
+      await db.query('UPDATE organization_admins SET last_login_at = CURRENT_TIMESTAMP WHERE id = ?', [admin.id]);
+      const token = jwtSign(
+        { type: 'admin', scope: 'org', adminId: Number(admin.id), orgCode },
+        config.jwtSecret,
+        config.adminTokenExpiresIn || '2h',
+      );
       res.json({
         token,
         admin: {
           id: Number(admin.id),
           username: admin.username,
           displayName: admin.display_name || admin.username,
-          storeId,
+          scope: 'org',
+          orgCode,
         },
-        store: { id: Number(store.id), name: store.name },
+        organization: { code: org.code, name: org.name },
+      });
+    }),
+  );
+
+  // SQL 开发者系统：单密码登录，权限更高
+  router.post(
+    '/sql/login',
+    asyncHandler(async (req, res) => {
+      const password = String(req.body?.password || '');
+      if (!password) throw new HttpError(400, '请输入 SQL 开发者系统密码');
+      const attemptKey = `admin:sql-login:${requestIp(req)}`;
+      const attempts = await checkAdminAttempts(cache, attemptKey);
+      if (!safeCompare(password, config.sqlAdminPassword)) {
+        await recordAdminFailure(cache, attemptKey, attempts);
+        throw new HttpError(403, 'SQL 开发者系统密码错误');
+      }
+      await cache.del(attemptKey);
+      const token = jwtSign(
+        { type: 'admin', scope: 'sql', adminId: 0 },
+        config.jwtSecret,
+        config.adminTokenExpiresIn || '2h',
+      );
+      res.json({
+        token,
+        admin: {
+          id: 0,
+          username: 'sql',
+          displayName: 'SQL 系统管理员',
+          scope: 'sql',
+          orgCode: null,
+        },
+        organization: null,
       });
     }),
   );
@@ -231,12 +288,134 @@ export function createAdminRouter({ db, config, cache, adminGuard }) {
     '/me',
     authGuard,
     asyncHandler(async (req, res) => {
+      if (req.isDeveloper) {
+        return res.json({
+          admin: { id: 0, username: 'sql', displayName: 'SQL 系统管理员', scope: 'sql', orgCode: null },
+          organization: null,
+        });
+      }
       const admin = await getAdminById(req.adminId);
-      const store = await getStore(req.storeId);
+      const org = await getOrg(req.orgCode);
       res.json({
-        admin: { id: Number(admin.id), username: admin.username, displayName: admin.display_name || admin.username, storeId: Number(admin.store_id) },
-        store: { id: Number(store.id), name: store.name },
+        admin: {
+          id: Number(admin.id),
+          username: admin.username,
+          displayName: admin.display_name || admin.username,
+          scope: 'org',
+          orgCode: admin.org_code,
+        },
+        organization: { code: org.code, name: org.name },
       });
+    }),
+  );
+
+  // 开发者专属：组织、组织管理员、系统设置
+  router.get(
+    '/organizations',
+    authGuard,
+    asyncHandler(async (req, res) => {
+      requireDeveloper(req);
+      const rows = await db.query(
+        `SELECT o.*, (SELECT COUNT(*) FROM organization_admins a WHERE a.org_code = o.code) AS admin_count
+         FROM organizations o ORDER BY o.code`,
+      );
+      res.json({
+        list: rows.map((row) => ({
+          code: row.code,
+          name: row.name,
+          status: Number(row.status),
+          adminCount: Number(row.admin_count || 0),
+          createdAt: toIso(row.created_at),
+        })),
+      });
+    }),
+  );
+
+  router.get(
+    '/organization-admins',
+    authGuard,
+    asyncHandler(async (req, res) => {
+      requireDeveloper(req);
+      const orgCode = req.query.orgCode ? normalizeOrgCode(req.query.orgCode) : null;
+      const rows = await db.query(
+        `SELECT a.id, a.org_code, a.username, a.display_name, a.status, a.last_login_at, a.created_at
+         FROM organization_admins a ${orgCode ? 'WHERE a.org_code = ?' : ''} ORDER BY a.id DESC`,
+        orgCode ? [orgCode] : [],
+      );
+      res.json({
+        list: rows.map((row) => ({
+          id: Number(row.id),
+          orgCode: row.org_code,
+          username: row.username,
+          displayName: row.display_name || row.username,
+          status: Number(row.status),
+          lastLoginAt: toIso(row.last_login_at),
+          createdAt: toIso(row.created_at),
+        })),
+      });
+    }),
+  );
+
+  router.post(
+    '/organization-admins',
+    authGuard,
+    asyncHandler(async (req, res) => {
+      requireDeveloper(req);
+      const orgCode = normalizeOrgCode(req.body?.orgCode);
+      const username = String(req.body?.username || '').trim();
+      const password = String(req.body?.password || '');
+      const displayName = String(req.body?.displayName || '').trim() || username;
+      if (!/^[A-Za-z0-9_\u4e00-\u9fa5]{2,32}$/.test(username)) {
+        throw new HttpError(400, '管理员账号需为 2–32 位中文、字母、数字或下划线');
+      }
+      if (password.length < 8) throw new HttpError(400, '个人登录密码至少 8 位');
+      await getOrg(orgCode);
+      const existing = await db.query(
+        'SELECT id FROM organization_admins WHERE org_code = ? AND username = ? LIMIT 1',
+        [orgCode, username],
+      );
+      const { salt, hash } = hashPassword(password);
+      if (existing.length) {
+        await db.query(
+          'UPDATE organization_admins SET password_hash = ?, password_salt = ?, display_name = ?, status = 1 WHERE id = ?',
+          [hash, salt, displayName, existing[0].id],
+        );
+        return res.json({ success: true, id: Number(existing[0].id), updated: true });
+      }
+      const result = await db.query(
+        'INSERT INTO organization_admins (org_code, username, password_hash, password_salt, display_name) VALUES (?, ?, ?, ?, ?)',
+        [orgCode, username, hash, salt, displayName],
+      );
+      res.json({ success: true, id: result.insertId, updated: false });
+    }),
+  );
+
+  router.get(
+    '/settings',
+    authGuard,
+    asyncHandler(async (req, res) => {
+      requireDeveloper(req);
+      const rows = await db.query('SELECT setting_key AS key, value, updated_at FROM system_settings ORDER BY setting_key');
+      res.json({ list: rows.map((row) => ({ key: row.key, value: row.value, updatedAt: toIso(row.updated_at) })) });
+    }),
+  );
+
+  router.put(
+    '/settings/:key',
+    authGuard,
+    asyncHandler(async (req, res) => {
+      requireDeveloper(req);
+      const key = String(req.params.key || '');
+      if (!/^[A-Za-z0-9_.:-]{2,64}$/.test(key)) throw new HttpError(400, '设置键名不合法');
+      const value = String(req.body?.value ?? '');
+      if (!value || Array.from(value).length > 255) throw new HttpError(400, '设置值不能为空且不能超过 255 字符');
+      const rows = await db.query('SELECT setting_key FROM system_settings WHERE setting_key = ? LIMIT 1', [key]);
+      if (rows.length) {
+        await db.query('UPDATE system_settings SET value = ?, updated_at = CURRENT_TIMESTAMP WHERE setting_key = ?', [value, key]);
+      } else {
+        await db.query('INSERT INTO system_settings (setting_key, value) VALUES (?, ?)', [key, value]);
+      }
+      res.json({ success: true, key, value });
     }),
   );
 

@@ -2,34 +2,39 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestContext } from './helpers/context.js';
 import { hashPassword } from '../src/utils/password.js';
 
-describe('门店管理后台', () => {
+describe('组织与 SQL 开发者管理后台', () => {
   let ctx;
-  let storeId;
+  const orgCode = '001';
 
   beforeEach(async () => {
     ctx = await createTestContext('admin');
-    storeId = 1001;
   });
 
   afterEach(async () => {
     await ctx.close();
   });
 
-  async function createAdmin(username = 'admin1001', password = 'Admin@12345') {
+  async function createAdmin(username = 'admin001', password = 'Admin@12345') {
     const { salt, hash } = hashPassword(password);
     const result = await ctx.deps.db.query(
-      'INSERT INTO store_admins (store_id, username, password_hash, password_salt, display_name) VALUES (?, ?, ?, ?, ?)',
-      [storeId, username, hash, salt, '一号门店管理员'],
+      'INSERT INTO organization_admins (org_code, username, password_hash, password_salt, display_name) VALUES (?, ?, ?, ?, ?)',
+      [orgCode, username, hash, salt, '组织管理员'],
     );
     return { id: result.insertId, username, password };
   }
 
-  async function adminToken(admin, gatePassword = 'redlight-admin-gate') {
-    const gate = await ctx.agent.post('/api/admin/gate').send({ storeId, password: gatePassword });
+  async function adminToken(admin, gatePassword = 'SQL') {
+    const gate = await ctx.agent.post(`/api/admin/orgs/${orgCode}/unlock`).send({ password: gatePassword });
     expect(gate.status).toBe(200);
     const login = await ctx.agent
-      .post('/api/admin/login')
-      .send({ storeId, gateToken: gate.body.gateToken, username: admin.username, password: admin.password });
+      .post(`/api/admin/orgs/${orgCode}/login`)
+      .send({ gateToken: gate.body.gateToken, username: admin.username, password: admin.password });
+    expect(login.status).toBe(200);
+    return login.body.token;
+  }
+
+  async function developerToken() {
+    const login = await ctx.agent.post('/api/admin/sql/login').send({ password: '1111' });
     expect(login.status).toBe(200);
     return login.body.token;
   }
@@ -42,30 +47,31 @@ describe('门店管理后台', () => {
     return response;
   }
 
-  it('门店入口、两级密码验证与管理员登录态', async () => {
+  it('组织入口、SQL 系统密码 + 个人密码与管理员登录态', async () => {
     await createAdmin();
-    const publicStore = await ctx.agent.get('/api/admin/stores/1001/public');
-    expect(publicStore.status).toBe(200);
-    expect(publicStore.body.store).toMatchObject({ id: 1001, name: '一号门店' });
-    expect((await ctx.agent.get('/api/admin/stores/9999/public')).status).toBe(404);
+    const publicOrg = await ctx.agent.get('/api/admin/orgs/001/public');
+    expect(publicOrg.status).toBe(200);
+    expect(publicOrg.body.organization).toMatchObject({ code: '001', name: '赤光社组织' });
+    expect((await ctx.agent.get('/api/admin/orgs/999/public')).status).toBe(404);
 
-    const wrongGate = await ctx.agent.post('/api/admin/gate').send({ storeId, password: 'wrong-gate' });
+    const wrongGate = await ctx.agent.post('/api/admin/orgs/001/unlock').send({ password: 'wrong-gate' });
     expect(wrongGate.status).toBe(403);
-    const gate = await ctx.agent.post('/api/admin/gate').send({ storeId, password: 'redlight-admin-gate' });
+    const gate = await ctx.agent.post('/api/admin/orgs/001/unlock').send({ password: 'SQL' });
     expect(gate.status).toBe(200);
     expect(gate.body.gateToken).toBeTruthy();
 
     const wrongLogin = await ctx.agent
-      .post('/api/admin/login')
-      .send({ storeId, gateToken: gate.body.gateToken, username: 'admin1001', password: 'wrong-password' });
+      .post('/api/admin/orgs/001/login')
+      .send({ gateToken: gate.body.gateToken, username: 'admin001', password: 'wrong-password' });
     expect(wrongLogin.status).toBe(401);
 
     const login = await ctx.agent
-      .post('/api/admin/login')
-      .send({ storeId, gateToken: gate.body.gateToken, username: 'admin1001', password: 'Admin@12345' });
+      .post('/api/admin/orgs/001/login')
+      .send({ gateToken: gate.body.gateToken, username: 'admin001', password: 'Admin@12345' });
     expect(login.status).toBe(200);
     expect(login.body.token).toBeTruthy();
-    expect(login.body.admin.storeId).toBe(storeId);
+    expect(login.body.admin.scope).toBe('org');
+    expect(login.body.admin.orgCode).toBe('001');
 
     const noToken = await ctx.agent.get('/api/admin/stats');
     expect(noToken.status).toBe(401);
@@ -73,8 +79,46 @@ describe('门店管理后台', () => {
     expect(withGateToken.status).toBe(401);
     const me = await ctx.agent.get('/api/admin/me').set('Authorization', `Bearer ${login.body.token}`);
     expect(me.status).toBe(200);
-    expect(me.body.admin.username).toBe('admin1001');
-    expect(me.body.store.id).toBe(storeId);
+    expect(me.body.admin.username).toBe('admin001');
+    expect(me.body.organization.code).toBe('001');
+
+    const orgCannotManage = await ctx.agent
+      .get('/api/admin/organizations')
+      .set('Authorization', `Bearer ${login.body.token}`);
+    expect(orgCannotManage.status).toBe(403);
+  });
+
+  it('SQL 开发者系统使用 1111 登录，拥有组织与系统设置高权限', async () => {
+    await createAdmin();
+    const wrong = await ctx.agent.post('/api/admin/sql/login').send({ password: '0000' });
+    expect(wrong.status).toBe(403);
+    const login = await ctx.agent.post('/api/admin/sql/login').send({ password: '1111' });
+    expect(login.status).toBe(200);
+    expect(login.body.admin.scope).toBe('sql');
+    expect(login.body.organization).toBeNull();
+    const token = login.body.token;
+
+    const me = await ctx.agent.get('/api/admin/me').set('Authorization', `Bearer ${token}`);
+    expect(me.status).toBe(200);
+    expect(me.body.admin.scope).toBe('sql');
+
+    const orgs = await ctx.agent.get('/api/admin/organizations').set('Authorization', `Bearer ${token}`);
+    expect(orgs.status).toBe(200);
+    expect(orgs.body.list.some((item) => item.code === '001')).toBe(true);
+
+    const settings = await ctx.agent.get('/api/admin/settings').set('Authorization', `Bearer ${token}`);
+    expect(settings.status).toBe(200);
+    expect(settings.body.list.some((item) => item.key === 'org.001.gate_password')).toBe(true);
+
+    const update = await ctx.agent
+      .put('/api/admin/settings/org.001.gate_password')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ value: 'SQL-NEW' });
+    expect(update.status).toBe(200);
+    const newGate = await ctx.agent.post('/api/admin/orgs/001/unlock').send({ password: 'SQL-NEW' });
+    expect(newGate.status).toBe(200);
+    const oldGate = await ctx.agent.post('/api/admin/orgs/001/unlock').send({ password: 'SQL' });
+    expect(oldGate.status).toBe(403);
   });
 
   it('文章举报进入后台，可下架文章并标记已处理', async () => {
@@ -89,7 +133,7 @@ describe('门店管理后台', () => {
     const duplicate = await createReport(reporter.token, 'post', post.id);
     expect(duplicate.status).toBe(409);
 
-    const token = await adminToken({ username: 'admin1001', password: 'Admin@12345' });
+    const token = await adminToken({ username: 'admin001', password: 'Admin@12345' });
     const list = await ctx.agent.get('/api/admin/reports?status=0').set('Authorization', `Bearer ${token}`);
     expect(list.status).toBe(200);
     const item = list.body.list.find((entry) => entry.id === report.body.id);
@@ -133,7 +177,7 @@ describe('门店管理后台', () => {
     const report = await createReport(reporter.token, 'book', bookId, '侵权盗版');
     expect(report.status).toBe(201);
 
-    const token = await adminToken({ username: 'admin1001', password: 'Admin@12345' });
+    const token = await adminToken({ username: 'admin001', password: 'Admin@12345' });
     const action = await ctx.agent
       .post(`/api/admin/reports/${report.body.id}/action`)
       .set('Authorization', `Bearer ${token}`)
@@ -151,7 +195,7 @@ describe('门店管理后台', () => {
     const reporter = await ctx.register('blockreporter@example.com');
     const post = await ctx.createPost(author.token, '举报后封锁作者的测试文章');
     const report = await createReport(reporter.token, 'post', post.id, '人身攻击');
-    const token = await adminToken({ username: 'admin1001', password: 'Admin@12345' });
+    const token = await adminToken({ username: 'admin001', password: 'Admin@12345' });
 
     const action = await ctx.agent
       .post(`/api/admin/reports/${report.body.id}/action`)
@@ -193,7 +237,7 @@ describe('门店管理后台', () => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [user.user.id, '后台管理图书', '作者', '其他', '', '/uploads/images/default-cover.svg', 'books/manage.pdf', 'pdf', 1024],
     );
-    const token = await adminToken({ username: 'admin1001', password: 'Admin@12345' });
+    const token = await adminToken({ username: 'admin001', password: 'Admin@12345' });
 
     const stats = await ctx.agent.get('/api/admin/stats').set('Authorization', `Bearer ${token}`);
     expect(stats.status).toBe(200);

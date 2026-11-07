@@ -229,8 +229,8 @@ async function main() {
       DB_FILE: path.join(tempDir, 'redlight.db'),
       UPLOAD_DIR: path.join(tempDir, 'uploads'),
       JWT_SECRET: 'redlight-e2e-secret',
-      ADMIN_GATE_PASSWORD: 'redlight-admin-gate',
-      ADMIN_BOOTSTRAP_PASSWORD: 'Admin@12345',
+      SQL_ADMIN_PASSWORD: '1111',
+      ORG_ADMIN_BOOTSTRAP_PASSWORD: 'Admin@12345',
       SMTP_HOST: '',
       REDIS_URL: '',
       CORS_ORIGIN: '*',
@@ -634,8 +634,8 @@ async function main() {
   await page.waitForSelector('[data-testid="search-book-grid"] .book-card');
   await shot(page, 'mobile-search');
 
-  // 16. 提交举报并在门店后台查看
-  log('提交举报并进入门店管理后台...');
+  // 16. 组织后台
+  log('提交举报并进入组织管理后台...');
   const reportResponse = await fetch(`${serverBase}/api/reports`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${secondLogin.token}` },
@@ -650,22 +650,22 @@ async function main() {
   assert(reportResponse.ok, `提交举报应成功：${JSON.stringify(reportBody)}`);
 
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.goto(`${webBase}/store/1001`, { waitUntil: 'networkidle' });
+  await page.goto(`${webBase}/org/001`, { waitUntil: 'networkidle' });
   await waitForTestId(page, 'admin-gate-password');
-  await fillTestId(page, 'admin-gate-password', 'redlight-admin-gate');
+  await fillTestId(page, 'admin-gate-password', 'SQL');
   await page.click('[data-testid="admin-gate-submit"]');
   await waitForTestId(page, 'admin-username');
-  await fillTestId(page, 'admin-username', 'admin1001');
+  await fillTestId(page, 'admin-username', 'admin001');
   await fillTestId(page, 'admin-password', 'Admin@12345');
   await page.click('[data-testid="admin-login-submit"]');
   await waitForTestId(page, 'admin-dashboard');
   await waitForText(page.locator('[data-testid="admin-report-list"]'), '自动化验收动态');
-  assert((await page.locator('.admin-brand').textContent()).includes('一号门店'), '后台应显示门店名称');
+  assert((await page.locator('.admin-brand').textContent()).includes('赤光社组织'), '后台应显示组织名称');
   assert((await page.locator('[data-testid="admin-dashboard"]').textContent()).includes('待处理举报'), '后台应显示举报统计');
   await sleep(500);
   await shot(page, 'admin-dashboard');
 
-  log('在后台下架被举报文章...');
+  log('下架被举报文章...');
   const reportActionResponse = page.waitForResponse(
     (response) => response.url().includes('/api/admin/reports/') && response.url().endsWith('/action'),
   );
@@ -676,6 +676,19 @@ async function main() {
   await waitForText(page.locator('[data-testid="admin-dashboard"]'), '暂无举报，社区秩序良好');
   await sleep(300);
   await shot(page, 'admin-report-handled');
+
+  log('检查 SQL 开发者管理系统（密码 1111）...');
+  await page.goto(`${webBase}/sql`, { waitUntil: 'networkidle' });
+  await waitForTestId(page, 'admin-gate-password');
+  await fillTestId(page, 'admin-gate-password', '1111');
+  await page.click('[data-testid="admin-gate-submit"]');
+  await waitForTestId(page, 'admin-dashboard');
+  assert((await page.locator('.admin-brand').textContent()).includes('SQL 开发者管理系统'), '应进入 SQL 开发者系统');
+  assert((await page.locator('[data-testid="admin-dashboard"]').textContent()).includes('组织管理'), '开发者应看到组织管理');
+  await page.getByRole('tab', { name: /系统设置/ }).click();
+  await waitForText(page.locator('[data-testid="admin-dashboard"]'), 'org.001.gate_password');
+  await sleep(500);
+  await shot(page, 'sql-admin');
 
   assert(pageErrors.length === 0, `页面存在未捕获异常：${pageErrors.join(' | ')}`);
   const relevantConsoleErrors = consoleErrors.filter(

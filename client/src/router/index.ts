@@ -66,10 +66,16 @@ const router = createRouter({
       meta: { requiresAuth: true, title: '上传图书' },
     },
     {
-      path: '/store/:storeId(\\d+)',
-      name: 'store-admin',
+      path: '/org/:orgCode([A-Za-z0-9_]+)',
+      name: 'org-admin',
       component: () => import('@/views/AdminPortal.vue'),
-      meta: { title: '门店管理后台' },
+      meta: { title: '组织管理后台' },
+    },
+    {
+      path: '/sql',
+      name: 'sql-admin',
+      component: () => import('@/views/AdminPortal.vue'),
+      meta: { title: 'SQL 开发者管理系统' },
     },
     {
       path: '/:pathMatch(.*)*',

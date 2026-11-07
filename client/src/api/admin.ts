@@ -4,8 +4,8 @@ import type { Book, User } from '@/types';
 export const ADMIN_TOKEN_KEY = 'redlight_admin_token';
 export const ADMIN_SESSION_KEY = 'redlight_admin_session';
 
-export interface AdminStore {
-  id: number;
+export interface AdminOrganization {
+  code: string;
   name: string;
 }
 
@@ -13,13 +13,14 @@ export interface AdminIdentity {
   id: number;
   username: string;
   displayName: string;
-  storeId: number;
+  scope: 'org' | 'sql';
+  orgCode: string | null;
 }
 
 export interface AdminSession {
   token: string;
   admin: AdminIdentity;
-  store: AdminStore;
+  organization: AdminOrganization | null;
 }
 
 export interface ReportTargetAuthor {
@@ -81,6 +82,30 @@ export interface AdminStats {
   users: number;
 }
 
+export interface AdminOrganizationRow {
+  code: string;
+  name: string;
+  status: number;
+  adminCount: number;
+  createdAt: string;
+}
+
+export interface OrganizationAdminRow {
+  id: number;
+  orgCode: string;
+  username: string;
+  displayName: string;
+  status: number;
+  lastLoginAt: string | null;
+  createdAt: string;
+}
+
+export interface SystemSettingRow {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
 export interface Paged<T> {
   list: T[];
   page: number;
@@ -109,7 +134,10 @@ export function getAdminSession(): AdminSession | null {
 
 export function saveAdminSession(session: AdminSession) {
   sessionStorage.setItem(ADMIN_TOKEN_KEY, session.token);
-  sessionStorage.setItem(ADMIN_SESSION_KEY, JSON.stringify({ admin: session.admin, store: session.store }));
+  sessionStorage.setItem(
+    ADMIN_SESSION_KEY,
+    JSON.stringify({ admin: session.admin, organization: session.organization }),
+  );
 }
 
 export function clearAdminSession() {
@@ -131,23 +159,27 @@ adminHttp.interceptors.response.use(
   },
 );
 
-export async function apiAdminStore(storeId: number): Promise<{ store: AdminStore }> {
-  const { data } = await adminHttp.get(`/api/admin/stores/${storeId}/public`);
+export async function apiOrganization(code: string): Promise<{ organization: AdminOrganization }> {
+  const { data } = await adminHttp.get(`/api/admin/orgs/${code}/public`);
   return data;
 }
 
-export async function apiAdminGate(storeId: number, password: string) {
+export async function apiOrgUnlock(code: string, password: string) {
   const { data } = await adminHttp.post<{
     gateToken: string;
     expiresIn: number;
-    store: AdminStore;
-  }>('/api/admin/gate', { storeId, password });
+    organization: AdminOrganization;
+  }>(`/api/admin/orgs/${code}/unlock`, { password });
   return data;
 }
 
-export async function apiAdminLogin(storeId: number, gateToken: string, username: string, password: string): Promise<AdminSession> {
-  const { data } = await adminHttp.post<AdminSession>('/api/admin/login', {
-    storeId,
+export async function apiOrgLogin(
+  code: string,
+  gateToken: string,
+  username: string,
+  password: string,
+): Promise<AdminSession> {
+  const { data } = await adminHttp.post<AdminSession>(`/api/admin/orgs/${code}/login`, {
     gateToken,
     username,
     password,
@@ -155,7 +187,12 @@ export async function apiAdminLogin(storeId: number, gateToken: string, username
   return data;
 }
 
-export async function apiAdminMe(): Promise<{ admin: AdminIdentity; store: AdminStore }> {
+export async function apiSqlLogin(password: string): Promise<AdminSession> {
+  const { data } = await adminHttp.post<AdminSession>('/api/admin/sql/login', { password });
+  return data;
+}
+
+export async function apiAdminMe(): Promise<{ admin: AdminIdentity; organization: AdminOrganization | null }> {
   const { data } = await adminHttp.get('/api/admin/me');
   return data;
 }
@@ -202,5 +239,37 @@ export async function apiAdminUsers(params: { page?: number; size?: number; q?: 
 
 export async function apiAdminSetUserStatus(id: number, status: number) {
   const { data } = await adminHttp.post(`/api/admin/users/${id}/status`, { status });
+  return data;
+}
+
+export async function apiAdminOrganizations() {
+  const { data } = await adminHttp.get<{ list: AdminOrganizationRow[] }>('/api/admin/organizations');
+  return data;
+}
+
+export async function apiAdminOrganizationAdmins(orgCode?: string) {
+  const { data } = await adminHttp.get<{ list: OrganizationAdminRow[] }>('/api/admin/organization-admins', {
+    params: orgCode ? { orgCode } : {},
+  });
+  return data;
+}
+
+export async function apiAdminUpsertOrganizationAdmin(payload: {
+  orgCode: string;
+  username: string;
+  password: string;
+  displayName?: string;
+}) {
+  const { data } = await adminHttp.post('/api/admin/organization-admins', payload);
+  return data;
+}
+
+export async function apiAdminSettings() {
+  const { data } = await adminHttp.get<{ list: SystemSettingRow[] }>('/api/admin/settings');
+  return data;
+}
+
+export async function apiAdminUpdateSetting(key: string, value: string) {
+  const { data } = await adminHttp.put(`/api/admin/settings/${encodeURIComponent(key)}`, { value });
   return data;
 }

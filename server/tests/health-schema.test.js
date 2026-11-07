@@ -55,7 +55,7 @@ describe('健康检查与数据库 schema', () => {
     const mysqlSql = fs.readFileSync(path.join(schemaDir, 'mysql.sql'), 'utf8');
     const sqliteSql = fs.readFileSync(path.join(schemaDir, 'sqlite.sql'), 'utf8');
     const mysqlTables = parseMysqlSchema(mysqlSql);
-    expect(mysqlTables.size).toBe(10);
+    expect(mysqlTables.size).toBe(11);
 
     for (const [table, mysqlColumns] of mysqlTables.entries()) {
       const info = await ctx.deps.db.query(`PRAGMA table_info('${table}')`);

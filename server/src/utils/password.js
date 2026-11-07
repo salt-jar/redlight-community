@@ -17,7 +17,7 @@ export function verifyPassword(password, salt, hash) {
   }
 }
 
-/** 常量时间比较短文本（统一管理密码） */
+/** 常量时间比较短文本（系统管理密码） */
 export function safeCompare(left, right) {
   const a = Buffer.from(String(left));
   const b = Buffer.from(String(right));

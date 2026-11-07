@@ -61,22 +61,29 @@ FROM users
 WHERE username = 'redstar_2026';
 ```
 
-### 门店管理后台表
+### 组织与 SQL 管理后台表
 
 | 表 | 说明 |
 | --- | --- |
-| `stores` | 门店编号（默认 `1001` / `1002`）与名称 |
-| `store_admins` | 门店管理员账号、scrypt 密码哈希、随机盐、启用状态、最后登录时间 |
+| `organizations` | 组织编号（默认 `001`）与名称 |
+| `organization_admins` | 组织管理员账号、scrypt 密码哈希、随机盐、启用状态、最后登录时间 |
+| `system_settings` | 系统设置；`org.001.gate_password` 是 001 组织第一级系统密码，默认 `SQL` |
 | `reports` | 举报记录：`target_type`（post / book）、`target_id`、原因、补充说明、处理状态与处理动作 |
 | `posts.status` | `1` 正常、`0` 已下架 |
 | `books.status` | `1` 正常、`0` 已下架 |
 
 ```sql
--- 查看门店与管理员（密码只存哈希，不可逆）
-SELECT s.id, s.name, a.username, a.display_name, a.status, a.last_login_at
-FROM stores s
-LEFT JOIN store_admins a ON a.store_id = s.id
-ORDER BY s.id, a.id;
+-- 查看组织与管理员（密码只存哈希，不可逆）
+SELECT o.code, o.name, a.username, a.display_name, a.status, a.last_login_at
+FROM organizations o
+LEFT JOIN organization_admins a ON a.org_code = o.code
+ORDER BY o.code, a.id;
+
+-- 查看 / 修改组织 001 第一级系统密码
+SELECT setting_key, value FROM system_settings;
+UPDATE system_settings
+SET value = '新的组织系统密码', updated_at = CURRENT_TIMESTAMP
+WHERE setting_key = 'org.001.gate_password';
 
 -- 查看待处理举报
 SELECT id, target_type, target_id, reason, detail, created_at
