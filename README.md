@@ -72,7 +72,7 @@
 ├── e2e/                       # Playwright Core 驱动本机 Edge 的端到端测试
 │   ├── run-e2e.mjs
 │   ├── fixtures/              # 测试用 PDF / EPUB / 封面
-│   └── screenshots/           # 最近一次 E2E 截图（含 e2e-result.json）
+│   └── screenshots/           # 最近一次 E2E 截图
 ├── scripts/
 │   ├── dev.mjs                # 一键启动前后端（后端 --watch）
 │   └── generate-fixtures.py   # 生成测试用 PDF / EPUB
@@ -83,6 +83,7 @@
 ├── DATABASE.md                # 登录数据库使用指南
 ├── RELEASE_NOTES.md           # v1.0.0 发布说明与本地完整运行指南
 ├── TEST-REPORT.md             # 验收报告（对照 checklist.md）
+├── PROJECT-OVERVIEW.md        # 面向新会话 / AI 的项目概述与上下文
 └── README.md
 ```
 
@@ -363,7 +364,7 @@ npm run e2e
 
 当前结果：**27 张截图，0 页面异常，0 控制台错误**。
 
-截图与结果保存在 `e2e/screenshots/`（含 `e2e-result.json`）。
+截图保存在 `e2e/screenshots/`；运行结果日志已从仓库移除并在 `.gitignore` 中忽略。
 
 > E2E 依赖本机已安装 Microsoft Edge；若使用其他路径，可修改 `e2e/run-e2e.mjs` 中的 `channel`。测试使用独立临时数据库，不会污染本地数据。
 
@@ -497,6 +498,7 @@ Socket.IO：连接时 `auth.token` 携带 JWT；`chat:join` `{ groupId }` 加入
 
 - 验收结果：[TEST-REPORT.md](TEST-REPORT.md)
 - 登录数据库使用：[DATABASE.md](DATABASE.md)
+- AI / 新对话项目上下文：[PROJECT-OVERVIEW.md](PROJECT-OVERVIEW.md)
 
 ---
 

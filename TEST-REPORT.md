@@ -104,7 +104,6 @@
 | `25-admin-groups.png` | 组织后台群聊管理，管理员创建新群聊 |
 | `26-proposal-detail.png` | 提案详情页：完整正文、返回按钮、投票、讨论与同步提示 |
 | `27-proposal-right-click.png` | 群聊内右键同步的提案消息，一键打开提案详情 |
-| `e2e-result.json` | 本次 E2E 结果（邮箱、昵称、27 张截图、错误列表为空） |
 
 ## 三、checklist.md 逐项核对
 
